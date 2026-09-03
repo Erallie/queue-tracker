@@ -1,0 +1,16 @@
+[Unit]
+Description=Erallie Queue Tracker API and MustardMine Connector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/queue-tracker/server
+EnvironmentFile=/opt/queue-tracker/server/.env
+ExecStart=/opt/queue-tracker/server/.venv/bin/python -m queue_tracker
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

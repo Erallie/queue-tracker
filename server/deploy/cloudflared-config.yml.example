@@ -1,0 +1,7 @@
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /home/pi/.cloudflared/YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: queue-api.example.com
+    service: http://127.0.0.1:8787
+  - service: http_status:404
