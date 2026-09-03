@@ -1,0 +1,1 @@
+export const env={PUBLIC_QUEUE_API_URL:"https://queue-api.gozarproductions.com"}
