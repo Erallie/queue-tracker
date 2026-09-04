@@ -97,9 +97,10 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .notice.error { border-left-color: rgb(var(--danger)); }
 .empty { padding: 3rem 1rem; text-align: center; color: rgb(var(--muted)); }
 .account-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1rem; }
-.account-card { display: grid; gap: 1rem; box-shadow: none; }
+.account-card { display: grid; height: 100%; gap: 1rem; box-shadow: none; }
+.account-grid > .account-card { margin-top: 0; }
 .provider { display: flex; align-items: center; gap: .85rem; }
-.provider-mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: white; background: var(--provider-color, rgb(var(--red))); font-weight: 800; }
+.provider-mark { display: block; flex: 0 0 42px; width: 42px; height: 42px; object-fit: contain; }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: rgb(var(--green)); }
 .section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 1.2rem; }
 .tabs { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(var(--line), .35); }

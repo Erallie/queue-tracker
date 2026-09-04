@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { authUrl, getAccount, logout, unlink } from '$lib/api';
+  import twitchIcon from '$lib/assets/providers/twitch-glitch.svg';
+  import discordIcon from '$lib/assets/providers/discord.svg';
+  import googleIcon from '$lib/assets/providers/google-g.svg';
   import type { Account } from '$lib/types';
 
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
@@ -8,9 +11,9 @@
   let status = $state('');
   let error = $state('');
   const providers = [
-    { id: 'twitch', name: 'Twitch', letter: 'T', color: '#ab212a' },
-    { id: 'discord', name: 'Discord', letter: 'D', color: '#14743d' },
-    { id: 'google', name: 'Google', letter: 'G', color: '#b7843a' }
+    { id: 'twitch', name: 'Twitch', icon: twitchIcon },
+    { id: 'discord', name: 'Discord', icon: discordIcon },
+    { id: 'google', name: 'Google', icon: googleIcon }
   ];
 
   function identity(provider: string) { return me.identities.find((item) => item.provider === provider); }
@@ -43,7 +46,7 @@
     <div class="section-heading"><div><h2>Sign in to request</h2><p class="muted">Choose any provider. Your password is never shared with this site.</p></div></div>
     <div class="account-grid">
       {#each providers as provider}
-        <button class="button secondary provider" type="button" onclick={() => connect(provider.id, 'login')}><span class="provider-mark" style={`--provider-color:${provider.color}`}>{provider.letter}</span><span>Continue with {provider.name}</span></button>
+        <button class="button secondary provider" type="button" onclick={() => connect(provider.id, 'login')}><img class="provider-mark" src={provider.icon} alt="" /><span>Continue with {provider.name}</span></button>
       {/each}
     </div>
   </section>
@@ -54,7 +57,7 @@
       {#each providers as provider}
         {@const linked = identity(provider.id)}
         <article class="panel account-card">
-          <div class="provider"><span class="provider-mark" style={`--provider-color:${provider.color}`}>{provider.letter}</span><div><h3>{provider.name}</h3><span class="muted">{linked?.display_name || 'Not linked'}</span></div>{#if linked}<span class="status-dot" title="Linked"></span>{/if}</div>
+          <div class="provider"><img class="provider-mark" src={provider.icon} alt="" /><div><h3>{provider.name}</h3><span class="muted">{linked?.display_name || 'Not linked'}</span></div>{#if linked}<span class="status-dot" title="Linked"></span>{/if}</div>
           {#if linked}<button class="button secondary small" onclick={() => disconnect(provider.id, provider.name)}>Disconnect</button>{:else}<button class="button small" onclick={() => connect(provider.id, 'link')}>Link {provider.name}</button>{/if}
         </article>
       {/each}
