@@ -1,12 +1,37 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { page } from '$app/state';
+  import { onMount } from 'svelte';
+  import { accountChangedEvent, getAccount } from '$lib/api';
   import LightDarkSwitcher from '$lib/LightDarkSwitcher.svelte';
   import logo from '$lib/assets/brand/gozar-productions-logo.svg';
+  import type { Account } from '$lib/types';
   import '../app.css';
 
   let { children } = $props();
   let isDarkMode = $state(false);
+  let account = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
+
+  onMount(() => {
+    let active = true;
+    const refreshAccount = async () => {
+      const next = await getAccount();
+      if (active) account = next;
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshAccount();
+    };
+    void refreshAccount();
+    window.addEventListener(accountChangedEvent, refreshAccount);
+    window.addEventListener('focus', refreshAccount);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      active = false;
+      window.removeEventListener(accountChangedEvent, refreshAccount);
+      window.removeEventListener('focus', refreshAccount);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  });
 </script>
 
 <svelte:head>
@@ -30,7 +55,9 @@
     <nav aria-label="Main navigation">
       <a class:active={page.url.pathname === `${base}/`} href={`${base}/`}>Songs</a>
       <a class:active={page.url.pathname.startsWith(`${base}/account`)} href={`${base}/account`}>Account</a>
-      <a class:active={page.url.pathname.startsWith(`${base}/admin`)} href={`${base}/admin`}>Dashboard</a>
+      {#if account.authenticated && account.is_admin}
+        <a class:active={page.url.pathname.startsWith(`${base}/admin`)} href={`${base}/admin`}>Dashboard</a>
+      {/if}
     </nav>
   </header>
 

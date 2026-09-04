@@ -3,6 +3,11 @@ import { demoAccount, demoCatalog, demoGroups, demoSettings } from './demo';
 import type { Account, Catalog, QueueState, Settings, SongGroup } from './types';
 
 const api = (env.PUBLIC_QUEUE_API_URL || '').replace(/\/$/, '');
+export const accountChangedEvent = 'queue-tracker-account-changed';
+
+function announceAccountChange() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(accountChangedEvent));
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!api) throw new Error('demo');
@@ -61,8 +66,15 @@ export async function requestSong(songId: string): Promise<{ queued: boolean; me
   return request(`/api/songs/${encodeURIComponent(songId)}/request`, { method: 'POST' });
 }
 
-export async function logout(): Promise<void> { await request('/api/logout', { method: 'POST' }); }
-export async function unlink(provider: string): Promise<{ account_deleted: boolean }> { return request(`/api/identities/${provider}`, { method: 'DELETE' }); }
+export async function logout(): Promise<void> {
+  await request('/api/logout', { method: 'POST' });
+  announceAccountChange();
+}
+export async function unlink(provider: string): Promise<{ account_deleted: boolean }> {
+  const result = await request<{ account_deleted: boolean }>(`/api/identities/${provider}`, { method: 'DELETE' });
+  announceAccountChange();
+  return result;
+}
 export async function saveSettings(settings: Settings): Promise<void> { await request('/api/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }); }
 export async function saveGroups(groups: SongGroup[]): Promise<void> { await request('/api/admin/groups', { method: 'PUT', body: JSON.stringify({ groups }) }); }
 export async function saveTags(tags: Catalog['tags']): Promise<void> { await request('/api/admin/tags', { method: 'PUT', body: JSON.stringify({ tags }) }); }
