@@ -237,6 +237,24 @@ class Store:
         title = self.request_title(song_id)
         if title: self.record_play(title, delta)
 
+    def remove_new_tag(self, song_id: str) -> bool:
+        if song_id.startswith("group:"):
+            rows = self.db.execute(
+                "SELECT raw_title FROM group_members WHERE group_id=? ORDER BY position",
+                (song_id[6:],),
+            ).fetchall()
+            raw_titles = {row["raw_title"] for row in rows}
+        else:
+            row = self.db.execute(
+                "SELECT raw_title FROM songs WHERE id=? AND active=1", (song_id,)
+            ).fetchone()
+            raw_titles = {row["raw_title"]} if row else set()
+        if not raw_titles:
+            return False
+        text = str(self.settings()["song_text"])
+        self.save_settings({"song_text": remove_new_marker(text, raw_titles)})
+        return True
+
     def record_request(self, user_id: str, raw_title: str, request_name: str) -> None:
         self.db.execute("INSERT INTO requests(id,user_id,raw_title,request_name,requested_at) VALUES(?,?,?,?,?)", (str(uuid.uuid4()), user_id, raw_title, request_name, now()))
         self.db.commit()

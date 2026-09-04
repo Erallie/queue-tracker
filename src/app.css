@@ -88,6 +88,9 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .actions { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; }
 .actions:has(.button) { margin-top: 1rem; }
+.tracker-actions { flex-wrap: nowrap; }
+.tracker-actions.actions:has(.button) { margin-top: 0; }
+.remove-new { white-space: nowrap; }
 
 .notice { margin-bottom: 1rem; padding: .85rem 1rem; border-left: 4px solid rgb(var(--gold)); background: rgba(var(--surface), .9); color: rgb(var(--foreground)); }
 .notice.success { border-left-color: rgb(var(--green)); }
@@ -159,6 +162,8 @@ code { color: rgb(var(--accent)); }
   .panel, .page-intro { padding: 1rem; }
   h1 { font-size: clamp(2rem, 12vw, 3.5rem); }
   th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5) { display: none; }
+  .tracker-table th:nth-child(2), .tracker-table td:nth-child(2), .tracker-table th:nth-child(3), .tracker-table td:nth-child(3) { display: none; }
+  .tracker-table th:nth-child(4), .tracker-table td:nth-child(4), .tracker-table th:nth-child(5), .tracker-table td:nth-child(5) { display: table-cell; }
   td, th { padding: .75rem .65rem; }
   .request-cell .button { padding-inline: .6rem; }
 }

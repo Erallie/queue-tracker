@@ -48,6 +48,7 @@ class Service:
         app.router.add_put("/api/admin/tags", self.save_tags)
         app.router.add_put("/api/admin/songs/{song_id}/tags", self.save_song_tags)
         app.router.add_post("/api/admin/songs/{song_id}/plays", self.adjust_play)
+        app.router.add_delete("/api/admin/songs/{song_id}/new", self.remove_new_tag)
         app.router.add_get("/auth/{provider}", self.begin_auth)
         app.router.add_get("/auth/{provider}/callback", self.auth_callback)
         app.on_startup.append(self.startup)
@@ -171,6 +172,12 @@ class Service:
 
     async def adjust_play(self, request: web.Request) -> web.Response:
         self.require_admin(request); body = await self.json(request); delta = max(-1, min(1, int(body.get("delta", 0)))); self.store.adjust_play(request.match_info["song_id"], delta); return web.json_response({"ok": True})
+
+    async def remove_new_tag(self, request: web.Request) -> web.Response:
+        self.require_admin(request)
+        if not self.store.remove_new_tag(request.match_info["song_id"]):
+            raise web.HTTPNotFound(text='{"error":"Song not found"}', content_type="application/json")
+        return web.json_response({"ok": True})
 
     def valid_return_to(self, value: str) -> str:
         origin = f"{urlparse(value).scheme}://{urlparse(value).netloc}".rstrip("/")

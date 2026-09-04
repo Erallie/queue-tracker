@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { adjustPlay, getAdmin, getAccount, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
+  import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
   import type { Account, Catalog, Settings, SongGroup } from '$lib/types';
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
@@ -13,6 +13,9 @@
   let status = $state('');
   let error = $state('');
   let groupSearches = $state<Record<number, string>>({});
+  let trackerQuery = $state('');
+  let trackerTags = $state<string[]>([]);
+  let removingNew = $state('');
 
   type GroupSongOption = {
     rawTitle: string;
@@ -49,6 +52,15 @@
   }
 
   const groupSongOptions = $derived(parseGroupSongOptions(settings.song_text));
+  const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
+  const trackedSongs = $derived.by(() => {
+    const needle = trackerQuery.trim().toLocaleLowerCase();
+    return catalog.songs.filter((song) => {
+      const textMatch = !needle || `${song.title} ${song.parenthetical}`.toLocaleLowerCase().includes(needle);
+      const tagMatch = trackerTags.every((tag) => song.tags.includes(tag));
+      return textMatch && tagMatch;
+    });
+  });
 
   function cleanForCopy(text: string): string {
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
@@ -117,6 +129,21 @@
     const song = catalog.songs.find((item) => item.id === songId);
     if (!song) return;
     song.tags = checked ? [...new Set([...song.tags, tag])] : song.tags.filter((item) => item !== tag);
+  }
+  function toggleTrackerTag(tag: string) {
+    trackerTags = trackerTags.includes(tag) ? trackerTags.filter((item) => item !== tag) : [...trackerTags, tag];
+  }
+  async function manuallyRemoveNew(songId: string) {
+    removingNew = songId; status = ''; error = '';
+    try {
+      await removeNewTag(songId);
+      ({ settings, groups, catalog } = await getAdmin());
+      status = 'New tag removed';
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : 'Could not remove the New tag';
+    } finally {
+      removingNew = '';
+    }
   }
 
   onMount(async () => {
@@ -243,11 +270,33 @@
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveTags(catalog.tags); await Promise.all(catalog.songs.map((song) => saveSongTags(song.id, song.tags))); }, 'Tags and song assignments saved')}>Save tags</button></div>
     {:else if tab === 'tracker'}
       <div class="section-heading"><div><h2>All songs</h2><p class="muted">Every song in the current song list appears here, whether or not it is New. Queue removals update automatically; same-song groups share one combined count.</p></div></div>
-      <div class="table-wrap"><table><thead><tr><th>Song</th><th>Last played</th><th class="number">Times played</th><th>Adjust</th></tr></thead><tbody>
-        {#each catalog.songs as song}
-          <tr><td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td><td>{song.last_played || 'Not yet'}</td><td class="number">{song.play_count}</td><td><div class="actions"><button class="button secondary small" onclick={async () => { await adjustPlay(song.id, -1); song.play_count = Math.max(0, song.play_count - 1); }}>−</button><button class="button small" onclick={async () => { await adjustPlay(song.id, 1); song.play_count += 1; }}>+</button></div></td></tr>
-        {/each}
-      </tbody></table></div>
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input bind:value={trackerQuery} type="search" placeholder="Search title, artist, or musical…" aria-label="Search tracked songs" />
+        </div>
+        <div class="tag-list" aria-label="Filter tracked songs by tags">
+          {#each catalog.tags as tag (tag.name)}
+            <button class:selected={trackerTags.includes(tag.name)} class="tag-filter" type="button" onclick={() => toggleTrackerTag(tag.name)}>{tag.name}</button>
+          {/each}
+        </div>
+      </div>
+      {#if trackerTags.length > 1}<p class="muted">Showing songs that have all {trackerTags.length} selected tags.</p>{/if}
+      {#if trackedSongs.length === 0}
+        <div class="empty"><strong>No songs match those filters.</strong><br />Try a different search or remove a tag.</div>
+      {:else}
+        <div class="table-wrap"><table class="tracker-table"><thead><tr><th>Song</th><th>Tags</th><th>Last played</th><th class="number">Times played</th><th>Adjust</th></tr></thead><tbody>
+          {#each trackedSongs as song (song.id)}
+            <tr>
+              <td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td>
+              <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
+              <td>{song.last_played || 'Not yet'}</td>
+              <td class="number">{song.play_count}</td>
+              <td><div class="actions tracker-actions"><button class="button secondary small" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { await adjustPlay(song.id, -1); song.play_count = Math.max(0, song.play_count - 1); }}>−</button><button class="button small" aria-label={`Increase plays for ${song.title}`} onclick={async () => { await adjustPlay(song.id, 1); song.play_count += 1; }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
+            </tr>
+          {/each}
+        </tbody></table></div>
+      {/if}
     {:else}
       <div class="section-heading"><div><h2>Tracking and queue settings</h2><p class="muted">New-song eligibility is evaluated hourly by the Pi service.</p></div></div>
       <div class="form-grid">
