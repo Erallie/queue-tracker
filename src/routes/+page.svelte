@@ -1,11 +1,12 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
-  import { getAccount, getCatalog, requestSong } from '$lib/api';
-  import type { Account, Catalog, Song } from '$lib/types';
+  import { getAccount, getCatalog, getQueue, requestSong, watchQueue } from '$lib/api';
+  import type { Account, Catalog, QueueState, Song } from '$lib/types';
 
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let account = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
+  let queueState = $state<QueueState>({ queue: [], connected: false });
   let query = $state('');
   let selectedTags = $state<string[]>([]);
   let loading = $state(true);
@@ -43,9 +44,26 @@
     } finally { requesting = ''; }
   }
 
-  onMount(async () => {
-    [catalog, account] = await Promise.all([getCatalog(), getAccount()]);
-    loading = false;
+  onMount(() => {
+    let alive = true;
+    let receivedLiveQueue = false;
+    const stopWatching = watchQueue((next) => {
+      receivedLiveQueue = true;
+      queueState = next;
+    });
+    void Promise.all([getCatalog(), getAccount()]).then(([nextCatalog, nextAccount]) => {
+      if (!alive) return;
+      catalog = nextCatalog;
+      account = nextAccount;
+      loading = false;
+    });
+    void getQueue().then((initialQueue) => {
+      if (alive && !receivedLiveQueue) queueState = initialQueue;
+    });
+    return () => {
+      alive = false;
+      stopWatching();
+    };
   });
 </script>
 
@@ -58,6 +76,30 @@
     <p class="lede">Browse the full song book, find a favorite, and send it straight to the request queue.</p>
   </div>
   <div class="script-note" aria-hidden="true">Pick a song ♡</div>
+</section>
+
+<section class="panel queue-panel" aria-labelledby="current-queue-heading" aria-live="polite">
+  <div class="section-heading queue-heading">
+    <div>
+      <div class="eyebrow">Live queue</div>
+      <h2 id="current-queue-heading">Up next</h2>
+    </div>
+    <span class:connected={queueState.connected} class="queue-status">{queueState.connected ? 'Live' : 'Reconnecting'}</span>
+  </div>
+  <div class="queue-viewport">
+    {#if queueState.queue.length === 0}
+      <p class="queue-empty">The request queue is empty.</p>
+    {:else}
+      <ol class="queue-list">
+        {#each queueState.queue as item, index (`${index}-${item.title}-${item.user}`)}
+          <li>
+            <span class="queue-position">{index + 1}</span>
+            <span class="queue-song"><strong>{item.title}</strong>{#if item.user}<small>Requested by {item.user}</small>{/if}</span>
+          </li>
+        {/each}
+      </ol>
+    {/if}
+  </div>
 </section>
 
 <section class="panel">

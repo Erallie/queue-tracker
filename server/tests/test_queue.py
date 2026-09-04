@@ -56,6 +56,22 @@ class QueueRequestTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._handle({"cmd": "update", "queue": [{"title": "Song (Show)", "user": "Viewer"}]})
         await pending
 
+    async def test_queue_update_confirms_when_requester_field_is_absent(self):
+        pending = asyncio.create_task(self.bridge.request("Song (Show)", "Viewer"))
+        await asyncio.sleep(0)
+        self.bridge._handle({"cmd": "update", "queue": [{"title": "Song (Show)"}]})
+        await pending
+
+    async def test_queue_update_is_published_to_every_listener(self):
+        first = self.bridge.subscribe()
+        second = self.bridge.subscribe()
+        await first.get()
+        await second.get()
+        expected = [{"title": "Song (Show)", "user": "Viewer"}]
+        self.bridge._handle({"cmd": "update", "queue": expected})
+        self.assertEqual(await first.get(), expected)
+        self.assertEqual(await second.get(), expected)
+
     async def test_request_command_cannot_be_overridden(self):
         pending = asyncio.create_task(self.bridge.request("Song (Show)", "Viewer"))
         await asyncio.sleep(0)

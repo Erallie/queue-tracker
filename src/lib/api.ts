@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/public';
 import { demoAccount, demoCatalog, demoGroups, demoSettings } from './demo';
-import type { Account, Catalog, Settings, SongGroup } from './types';
+import type { Account, Catalog, QueueState, Settings, SongGroup } from './types';
 
 const api = (env.PUBLIC_QUEUE_API_URL || '').replace(/\/$/, '');
 
@@ -22,6 +22,20 @@ export async function getCatalog(): Promise<Catalog> {
 
 export async function getAccount(): Promise<Account> {
   try { return await request<Account>('/api/me'); } catch { return demoAccount; }
+}
+
+export async function getQueue(): Promise<QueueState> {
+  if (!api) return { queue: [], connected: false };
+  return request<QueueState>('/api/queue');
+}
+
+export function watchQueue(update: (state: QueueState) => void): () => void {
+  if (!api || typeof EventSource === 'undefined') return () => {};
+  const events = new EventSource(`${api}/api/queue/events`);
+  events.addEventListener('queue', (event) => {
+    try { update(JSON.parse((event as MessageEvent).data) as QueueState); } catch { /* A reconnect delivers another snapshot. */ }
+  });
+  return () => events.close();
 }
 
 export async function getAdmin(): Promise<{ settings: Settings; groups: SongGroup[]; catalog: Catalog }> {

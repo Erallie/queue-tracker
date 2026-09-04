@@ -19,6 +19,7 @@ class QueueBridge:
         self.task: asyncio.Task[None] | None = None
         self.previous: list[str] = []
         self.current_queue: list[dict[str, str]] = []
+        self.listeners: set[asyncio.Queue[list[dict[str, str]]]] = set()
         self.connected = False
         self._send_lock = asyncio.Lock()
         self._choose_reply: asyncio.Future[dict[str, Any]] | None = None
@@ -48,6 +49,7 @@ class QueueBridge:
                 async with self.session.ws_connect(settings["queue_websocket_url"], heartbeat=25, headers=headers) as socket:
                     self.socket = socket
                     self.connected = True
+                    self._publish_queue()
                     delay = 2
                     logging.info("Queue WebSocket connected (request authentication configured: %s)", bool(self.auth_cookie))
                     await socket.send_json({"cmd": "init", "type": "chan_queue", "group": settings["queue_group"]})
@@ -63,6 +65,7 @@ class QueueBridge:
             finally:
                 self.connected = False
                 self.socket = None
+                self._publish_queue()
                 if self._choose_reply and not self._choose_reply.done():
                     self._choose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the request"))
             await asyncio.sleep(delay)
@@ -83,13 +86,17 @@ class QueueBridge:
         if not isinstance(queue, list):
             return
         self.current_queue = [
-            {"title": str(item.get("title") or ""), "user": str(item.get("user") or "")}
+            {
+                "title": str(item.get("title") or ""),
+                "user": str(item.get("user") or item.get("added_for") or item.get("requester") or ""),
+            }
             for item in queue
             if isinstance(item, dict) and item.get("title")
         ]
+        self._publish_queue()
         if self._choose_reply and not self._choose_reply.done() and self._choose_expected:
             title, request_name, previous_count = self._choose_expected
-            current_count = sum(item["title"] == title and item["user"] == request_name for item in self.current_queue)
+            current_count = sum(item["title"] == title for item in self.current_queue)
             if current_count > previous_count:
                 self._choose_reply.set_result({"cmd": "choose", "selection": title, "confirmed_by": "queue_update"})
         current = [item["title"] for item in self.current_queue]
@@ -97,6 +104,22 @@ class QueueBridge:
         self.previous = current
         if removed:
             self.store.record_play(removed)
+
+    def subscribe(self) -> asyncio.Queue[list[dict[str, str]]]:
+        listener: asyncio.Queue[list[dict[str, str]]] = asyncio.Queue(maxsize=1)
+        listener.put_nowait(list(self.current_queue))
+        self.listeners.add(listener)
+        return listener
+
+    def unsubscribe(self, listener: asyncio.Queue[list[dict[str, str]]]) -> None:
+        self.listeners.discard(listener)
+
+    def _publish_queue(self) -> None:
+        snapshot = list(self.current_queue)
+        for listener in self.listeners:
+            if listener.full():
+                listener.get_nowait()
+            listener.put_nowait(snapshot)
 
     @staticmethod
     def _first_slot_removed(previous: list[str], current: list[str]) -> str | None:
@@ -121,7 +144,7 @@ class QueueBridge:
                 raise RuntimeError("The request queue is temporarily disconnected")
             reply = asyncio.get_running_loop().create_future()
             self._choose_reply = reply
-            previous_count = sum(item["title"] == title and item["user"] == request_name for item in self.current_queue)
+            previous_count = sum(item["title"] == title for item in self.current_queue)
             self._choose_expected = (title, request_name, previous_count)
             try:
                 logging.info("Sending MustardMine queue request for %r on behalf of %r", title, request_name)

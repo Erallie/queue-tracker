@@ -27,6 +27,16 @@ export type Catalog = {
   tags: { name: string; points: number; color?: string }[];
 };
 
+export type QueueItem = {
+  title: string;
+  user: string;
+};
+
+export type QueueState = {
+  queue: QueueItem[];
+  connected: boolean;
+};
+
 export type Settings = {
   song_text: string;
   new_play_threshold: number;

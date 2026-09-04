@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import secrets
@@ -38,6 +39,8 @@ class Service:
         app = web.Application(middlewares=[self.cors])
         app.router.add_get("/api/health", self.health)
         app.router.add_get("/api/catalog", self.catalog)
+        app.router.add_get("/api/queue", self.current_queue)
+        app.router.add_get("/api/queue/events", self.queue_events)
         app.router.add_get("/api/me", self.me)
         app.router.add_post("/api/logout", self.logout)
         app.router.add_delete("/api/identities/{provider}", self.unlink)
@@ -123,6 +126,36 @@ class Service:
 
     async def catalog(self, _request: web.Request) -> web.Response:
         return web.json_response(self.store.catalog())
+
+    async def current_queue(self, _request: web.Request) -> web.Response:
+        return web.json_response({"queue": self.queue.current_queue, "connected": self.queue.connected})
+
+    async def queue_events(self, request: web.Request) -> web.StreamResponse:
+        headers = {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        }
+        origin = request.headers.get("Origin", "").rstrip("/")
+        if origin in self.origins:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Vary"] = "Origin"
+        response = web.StreamResponse(headers=headers)
+        await response.prepare(request)
+        listener = self.queue.subscribe()
+        try:
+            while True:
+                try:
+                    queue = await asyncio.wait_for(listener.get(), timeout=20)
+                    payload = {"queue": queue, "connected": self.queue.connected}
+                    await response.write(f"event: queue\ndata: {json.dumps(payload)}\n\n".encode())
+                except TimeoutError:
+                    await response.write(b": keepalive\n\n")
+        except (ConnectionError, asyncio.CancelledError):
+            pass
+        finally:
+            self.queue.unsubscribe(listener)
+        return response
 
     async def me(self, request: web.Request) -> web.Response:
         user_id = self.user_id(request)
