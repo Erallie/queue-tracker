@@ -119,7 +119,7 @@ class Service:
         except Exception: raise web.HTTPBadRequest(text='{"error":"Invalid JSON"}', content_type="application/json")
 
     async def health(self, _request: web.Request) -> web.Response:
-        return web.json_response({"ok": True, "queue_connected": self.queue.connected})
+        return web.json_response({"ok": True, "queue_connected": self.queue.connected, "queue_requests_configured": bool(self.queue.auth_cookie)})
 
     async def catalog(self, _request: web.Request) -> web.Response:
         return web.json_response(self.store.catalog())
@@ -147,8 +147,10 @@ class Service:
         title = self.store.request_title(request.match_info["song_id"])
         if not title: raise web.HTTPNotFound(text='{"error":"Song not found"}', content_type="application/json")
         name = self.request_name(user_id)
-        try: await self.queue.request(title, name)
-        except RuntimeError as error: raise web.HTTPServiceUnavailable(text=f'{{"error":"{str(error)}"}}', content_type="application/json")
+        try:
+            await self.queue.request(title, name)
+        except RuntimeError as error:
+            return web.json_response({"error": str(error)}, status=503)
         self.store.record_request(user_id, title, name)
         return web.json_response({"queued": True, "message": f"{title} was requested for {name}"})
 

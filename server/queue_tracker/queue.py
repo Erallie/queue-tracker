@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 import aiohttp
@@ -19,6 +20,8 @@ class QueueBridge:
         self.previous: list[str] = []
         self.connected = False
         self._send_lock = asyncio.Lock()
+        self._choose_reply: asyncio.Future[dict[str, Any]] | None = None
+        self.auth_cookie = os.getenv("MUSTARDMINE_COOKIE", "").strip()
 
     async def start(self) -> None:
         if not self.task or self.task.done():
@@ -39,7 +42,8 @@ class QueueBridge:
                 settings = self.store.settings()
                 if not self.session or self.session.closed:
                     self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45))
-                async with self.session.ws_connect(settings["queue_websocket_url"], heartbeat=25) as socket:
+                headers = {"Cookie": self.auth_cookie} if self.auth_cookie else None
+                async with self.session.ws_connect(settings["queue_websocket_url"], heartbeat=25, headers=headers) as socket:
                     self.socket = socket
                     self.connected = True
                     delay = 2
@@ -56,10 +60,16 @@ class QueueBridge:
             finally:
                 self.connected = False
                 self.socket = None
+                if self._choose_reply and not self._choose_reply.done():
+                    self._choose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the request"))
             await asyncio.sleep(delay)
             delay = min(delay * 2, 60)
 
     def _handle(self, payload: dict[str, Any]) -> None:
+        if payload.get("cmd") == "choose":
+            if self._choose_reply and not self._choose_reply.done():
+                self._choose_reply.set_result(payload)
+            return
         if payload.get("cmd") != "update":
             return
         queue = payload.get("queue")
@@ -88,12 +98,25 @@ class QueueBridge:
         return None
 
     async def request(self, title: str, request_name: str) -> None:
+        if not self.auth_cookie:
+            raise RuntimeError("Song requests are not configured on the server")
         settings = self.store.settings()
         payload = {"cmd": settings["request_command"], "selection": title, "added_for": request_name}
         async with self._send_lock:
             if not self.socket or self.socket.closed:
                 raise RuntimeError("The request queue is temporarily disconnected")
-            await self.socket.send_json(payload)
+            reply = asyncio.get_running_loop().create_future()
+            self._choose_reply = reply
+            try:
+                await self.socket.send_json(payload)
+                result = await asyncio.wait_for(reply, timeout=10)
+            except TimeoutError as error:
+                raise RuntimeError("The request queue did not confirm the request") from error
+            finally:
+                if self._choose_reply is reply:
+                    self._choose_reply = None
+            if result.get("error"):
+                raise RuntimeError(str(result["error"]))
 
 
 async def hourly_maintenance(store: Store) -> None:

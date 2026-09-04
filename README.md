@@ -27,8 +27,9 @@ Requires Python 3.11 or newer.
 
 1. Enter `server`, create a virtual environment, and install `requirements.txt`.
 2. Copy `.env.example` to `.env` and fill in the public URL, frontend origins, OAuth credentials, owner identity IDs, and a Fernet encryption key.
-3. Run `python -m queue_tracker`.
-4. Point a Cloudflare Tunnel hostname at `http://127.0.0.1:8787`. Examples for cloudflared and systemd are in `server/deploy`.
+3. Sign in to MustardMine in a browser as the broadcaster or a moderator for the queue. Copy the value of the `Cookie` request header (everything after `Cookie:`) from that logged-in MustardMine session into `MUSTARDMINE_COOKIE` in `.env`. Treat this value like a password. It lets the Pi submit `choose` commands with `added_for` names; without it, the public socket can read the queue but MustardMine rejects requests as `Not logged in`.
+4. Run `python -m queue_tracker`.
+5. Point a Cloudflare Tunnel hostname at `http://127.0.0.1:8787`. Examples for cloudflared and systemd are in `server/deploy`.
 
 OAuth callback URLs:
 
