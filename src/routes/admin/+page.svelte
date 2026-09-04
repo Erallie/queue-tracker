@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
+  import { normalizeSearch } from '$lib/search';
   import type { Account, Catalog, Settings, SongGroup } from '$lib/types';
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
@@ -56,17 +57,17 @@
   const groupSongOptions = $derived(parseGroupSongOptions(settings.song_text));
   const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
   const tagAssignmentSongs = $derived.by(() => {
-    const needle = tagQuery.trim().toLocaleLowerCase();
+    const needle = normalizeSearch(tagQuery.trim());
     return catalog.songs.filter((song) => {
-      const textMatch = !needle || `${song.title} ${song.parenthetical}`.toLocaleLowerCase().includes(needle);
+      const textMatch = !needle || normalizeSearch(`${song.title} ${song.parenthetical}`).includes(needle);
       const tagMatch = tagFilters.every((tag) => song.tags.includes(tag));
       return textMatch && tagMatch;
     });
   });
   const trackedSongs = $derived.by(() => {
-    const needle = trackerQuery.trim().toLocaleLowerCase();
+    const needle = normalizeSearch(trackerQuery.trim());
     return catalog.songs.filter((song) => {
-      const textMatch = !needle || `${song.title} ${song.parenthetical}`.toLocaleLowerCase().includes(needle);
+      const textMatch = !needle || normalizeSearch(`${song.title} ${song.parenthetical}`).includes(needle);
       const tagMatch = trackerTags.every((tag) => song.tags.includes(tag));
       return textMatch && tagMatch;
     });
@@ -119,12 +120,12 @@
     group.members = group.members.filter((_, index) => index !== memberIndex);
   }
   function groupSearchResults(group: SongGroup, groupIndex: number) {
-    const query = (groupSearches[groupIndex] || '').trim().toLocaleLowerCase();
+    const query = normalizeSearch((groupSearches[groupIndex] || '').trim());
     if (!query) return [];
     const usedElsewhere = new Set(groups.flatMap((item, index) => index === groupIndex ? [] : item.members));
     return groupSongOptions.filter((song) => {
       if (group.members.includes(song.rawTitle) || usedElsewhere.has(song.rawTitle)) return false;
-      return `${song.title} ${song.parenthetical} ${song.section}`.toLocaleLowerCase().includes(query);
+      return normalizeSearch(`${song.title} ${song.parenthetical} ${song.section}`).includes(query);
     }).slice(0, 12);
   }
   function addTag() { catalog.tags = [...catalog.tags, { name: 'New tag', points: 0, color: '#ab212a' }]; }

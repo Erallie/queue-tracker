@@ -2,6 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { getAccount, getCatalog, getQueue, requestSong, watchQueue } from '$lib/api';
+  import { normalizeSearch } from '$lib/search';
   import type { Account, Catalog, QueueState, Song } from '$lib/types';
 
   let catalog = $state<Catalog>({ songs: [], tags: [] });
@@ -16,9 +17,9 @@
 
   const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
   const filtered = $derived.by(() => {
-    const needle = query.trim().toLocaleLowerCase();
+    const needle = normalizeSearch(query.trim());
     return catalog.songs.filter((song) => {
-      const textMatch = !needle || `${song.title} ${song.parenthetical}`.toLocaleLowerCase().includes(needle);
+      const textMatch = !needle || normalizeSearch(`${song.title} ${song.parenthetical}`).includes(needle);
       const tagMatch = selectedTags.every((tag) => song.tags.includes(tag));
       return textMatch && tagMatch;
     });
