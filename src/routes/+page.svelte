@@ -31,6 +31,22 @@
     selectedTags = selectedTags.includes(tag) ? selectedTags.filter((item) => item !== tag) : [...selectedTags, tag];
   }
 
+  function applyLiveCatalog(next: Catalog) {
+    if (catalog.songs.length === 0) {
+      catalog = next;
+      return;
+    }
+    const updates = new Map(next.songs.map((song) => [song.id, song]));
+    const existingIds = new Set(catalog.songs.map((song) => song.id));
+    catalog = {
+      tags: next.tags,
+      songs: [
+        ...catalog.songs.flatMap((song) => updates.has(song.id) ? [updates.get(song.id)!] : []),
+        ...next.songs.filter((song) => !existingIds.has(song.id))
+      ]
+    };
+  }
+
   async function queue(song: Song) {
     if (!account.authenticated) { location.href = `${base}/account`; return; }
     requesting = song.id; message = ''; error = '';
@@ -49,7 +65,7 @@
     const clockTimer = window.setInterval(() => { clock = Date.now(); }, 60_000);
     const stopWatchingCatalog = watchCatalog((next) => {
       receivedLiveCatalog = true;
-      catalog = next;
+      applyLiveCatalog(next);
     });
     const stopWatching = watchQueue((next) => {
       receivedLiveQueue = true;
