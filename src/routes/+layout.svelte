@@ -37,7 +37,7 @@
 <svelte:head>
   <meta name="description" content="Browse Erallie's song list and request a song." />
   <meta name="theme-color" content={isDarkMode ? '#17110e' : '#f8f4ee'} />
-  <link rel="icon" href={`${base}/favicon.svg`} />
+  <link rel="icon" type="image/png" href={`${base}/favicon.png`} />
 </svelte:head>
 
 <div class:dark={isDarkMode} class:light={!isDarkMode} class="app-shell">

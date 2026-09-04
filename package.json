@@ -3,6 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "dependencies": {
+    "@codemirror/commands": "^6.9.0",
+    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.6"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",

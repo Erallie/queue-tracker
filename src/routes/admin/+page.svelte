@@ -3,6 +3,7 @@
   import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
+  import MarkdownEditor from '$lib/MarkdownEditor.svelte';
   import type { Account, Catalog, Settings, SongGroup } from '$lib/types';
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
@@ -209,7 +210,7 @@
 
     {#if tab === 'songs'}
       <div class="section-heading"><div><h2>Editable song list</h2><p class="muted">Keep the same heading and one-song-per-line format. Adding or removing <code>[New]</code> updates tracking immediately.</p></div></div>
-      <textarea class="song-editor" bind:value={settings.song_text} spellcheck="false" aria-label="Song list"></textarea>
+      <MarkdownEditor bind:value={settings.song_text} />
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button><button class="button secondary" onclick={pasteText}>Paste from clipboard</button></div>
     {:else if tab === 'groups'}
       <div class="section-heading"><div><h2>Same-song groups</h2><p class="muted">Search the current song list and add the songs that should be treated as one song.</p></div><button class="button secondary small" onclick={addGroup}>Add group</button></div>
