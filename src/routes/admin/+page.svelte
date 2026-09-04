@@ -96,13 +96,6 @@
   function removeGroupMember(group: SongGroup, memberIndex: number) {
     group.members = group.members.filter((_, index) => index !== memberIndex);
   }
-  function moveGroupMember(group: SongGroup, memberIndex: number, direction: -1 | 1) {
-    const destination = memberIndex + direction;
-    if (destination < 0 || destination >= group.members.length) return;
-    const members = [...group.members];
-    [members[memberIndex], members[destination]] = [members[destination], members[memberIndex]];
-    group.members = members;
-  }
   function groupSearchResults(group: SongGroup, groupIndex: number) {
     const query = (groupSearches[groupIndex] || '').trim().toLocaleLowerCase();
     if (!query) return [];
@@ -164,7 +157,7 @@
       <textarea class="song-editor" bind:value={settings.song_text} spellcheck="false" aria-label="Song list"></textarea>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button><button class="button secondary" onclick={pasteText}>Paste from clipboard</button></div>
     {:else if tab === 'groups'}
-      <div class="section-heading"><div><h2>Same-song groups</h2><p class="muted">Search the current song list to add members. The first member is the version sent to MustardMine.</p></div><button class="button secondary small" onclick={addGroup}>Add group</button></div>
+      <div class="section-heading"><div><h2>Same-song groups</h2><p class="muted">Search the current song list and add the songs that should be treated as one song.</p></div><button class="button secondary small" onclick={addGroup}>Add group</button></div>
       <div class="stack">
         {#each groups as group, index}
           <div class="group-card">
@@ -172,19 +165,16 @@
             <div class="member-editor">
               <span class="field-label">Group members</span>
               {#if group.members.length}
-                <ol class="member-list">
+                <ul class="member-list">
                   {#each group.members as member, memberIndex}
                     <li class="member-row">
-                      <span class:requested-member={memberIndex === 0} class="member-position">{memberIndex === 0 ? 'Requested' : memberIndex + 1}</span>
                       <span class="member-name">{member}</span>
                       <span class="member-actions">
-                        <button type="button" aria-label={`Move ${member} up`} title="Move up" disabled={memberIndex === 0} onclick={() => moveGroupMember(group, memberIndex, -1)}>↑</button>
-                        <button type="button" aria-label={`Move ${member} down`} title="Move down" disabled={memberIndex === group.members.length - 1} onclick={() => moveGroupMember(group, memberIndex, 1)}>↓</button>
                         <button class="remove-member" type="button" aria-label={`Remove ${member} from group`} title="Remove from group" onclick={() => removeGroupMember(group, memberIndex)}>×</button>
                       </span>
                     </li>
                   {/each}
-                </ol>
+                </ul>
               {:else}
                 <p class="member-empty">No songs selected yet.</p>
               {/if}
@@ -209,7 +199,7 @@
                   </div>
                 {/if}
               </div>
-              <small class="muted">A group needs at least two songs. Songs assigned to another group are hidden from results.</small>
+              <small class="muted">A group needs at least two songs. Songs assigned to another group are hidden from the search.</small>
             </div>
             <button class="button secondary small" onclick={() => groups = groups.filter((_, i) => i !== index)}>Remove</button>
           </div>

@@ -108,9 +108,7 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .member-editor { display: grid; gap: .6rem; min-width: 0; }
 .field-label { color: rgb(var(--foreground)); font-size: .85rem; font-weight: 650; }
 .member-list { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
-.member-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: .55rem; min-height: 42px; padding: .4rem .5rem; border: 1px solid rgba(var(--line), .25); background: rgba(var(--surface-strong), .72); }
-.member-position { color: rgb(var(--muted)); font-size: .7rem; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .06em; }
-.member-position.requested-member { padding: .25rem .35rem; color: white; background: rgb(var(--green)); }
+.member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .55rem; min-height: 42px; padding: .4rem .5rem .4rem .75rem; border: 1px solid rgba(var(--line), .25); background: rgba(var(--surface-strong), .72); }
 .member-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
 .member-actions { display: flex; gap: .25rem; }
 .member-actions button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid rgba(var(--line), .35); color: rgb(var(--foreground)); background: rgba(var(--surface), .88); cursor: pointer; }
