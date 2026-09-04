@@ -12,6 +12,43 @@
   let saving = $state(false);
   let status = $state('');
   let error = $state('');
+  let groupSearches = $state<Record<number, string>>({});
+
+  type GroupSongOption = {
+    rawTitle: string;
+    title: string;
+    parenthetical: string;
+    section: string;
+  };
+
+  function parseGroupSongOptions(text: string): GroupSongOption[] {
+    const options: GroupSongOption[] = [];
+    let started = false;
+    let section = '';
+    for (const source of text.replace(/\r\n?/g, '\n').split('\n')) {
+      const line = source.trim();
+      if (!started) {
+        if (line.startsWith('#')) started = true;
+        else continue;
+      }
+      if (!line || line.startsWith('*')) continue;
+      if (line.startsWith('#')) {
+        if (line.startsWith('# ')) section = line.slice(2).trim();
+        continue;
+      }
+      const rawTitle = line.replace(/\s*\[New\]\s*$/i, '').trim();
+      const match = rawTitle.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+      options.push({
+        rawTitle,
+        title: match?.[1]?.trim() || rawTitle,
+        parenthetical: match?.[2]?.trim() || '',
+        section
+      });
+    }
+    return options;
+  }
+
+  const groupSongOptions = $derived(parseGroupSongOptions(settings.song_text));
 
   function cleanForCopy(text: string): string {
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
@@ -51,8 +88,30 @@
     finally { saving = false; }
   }
 
-  function addGroup() { groups = [...groups, { display_name: '', members: ['', ''] }]; }
-  function setMembers(group: SongGroup, value: string) { group.members = value.split('\n').map((line) => line.trim()).filter(Boolean); }
+  function addGroup() { groups = [...groups, { display_name: '', members: [] }]; }
+  function addGroupMember(group: SongGroup, groupIndex: number, rawTitle: string) {
+    if (!group.members.includes(rawTitle)) group.members = [...group.members, rawTitle];
+    groupSearches[groupIndex] = '';
+  }
+  function removeGroupMember(group: SongGroup, memberIndex: number) {
+    group.members = group.members.filter((_, index) => index !== memberIndex);
+  }
+  function moveGroupMember(group: SongGroup, memberIndex: number, direction: -1 | 1) {
+    const destination = memberIndex + direction;
+    if (destination < 0 || destination >= group.members.length) return;
+    const members = [...group.members];
+    [members[memberIndex], members[destination]] = [members[destination], members[memberIndex]];
+    group.members = members;
+  }
+  function groupSearchResults(group: SongGroup, groupIndex: number) {
+    const query = (groupSearches[groupIndex] || '').trim().toLocaleLowerCase();
+    if (!query) return [];
+    const usedElsewhere = new Set(groups.flatMap((item, index) => index === groupIndex ? [] : item.members));
+    return groupSongOptions.filter((song) => {
+      if (group.members.includes(song.rawTitle) || usedElsewhere.has(song.rawTitle)) return false;
+      return `${song.title} ${song.parenthetical} ${song.section}`.toLocaleLowerCase().includes(query);
+    }).slice(0, 12);
+  }
   function addTag() { catalog.tags = [...catalog.tags, { name: 'New tag', points: 0, color: '#ab212a' }]; }
   function toggleSongTag(songId: string, tag: string, checked: boolean) {
     const song = catalog.songs.find((item) => item.id === songId);
@@ -105,12 +164,53 @@
       <textarea class="song-editor" bind:value={settings.song_text} spellcheck="false" aria-label="Song list"></textarea>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button><button class="button secondary" onclick={pasteText}>Paste from clipboard</button></div>
     {:else if tab === 'groups'}
-      <div class="section-heading"><div><h2>Same-song groups</h2><p class="muted">The display name supplies the public title and parenthetical. Requests send the first member.</p></div><button class="button secondary small" onclick={addGroup}>Add group</button></div>
+      <div class="section-heading"><div><h2>Same-song groups</h2><p class="muted">Search the current song list to add members. The first member is the version sent to MustardMine.</p></div><button class="button secondary small" onclick={addGroup}>Add group</button></div>
       <div class="stack">
         {#each groups as group, index}
           <div class="group-card">
             <label>Public group name<input bind:value={group.display_name} placeholder="Title (Artist or Musical)" /></label>
-            <label>Members, first one requested<textarea value={group.members.join('\n')} oninput={(event) => setMembers(group, event.currentTarget.value)} rows="4"></textarea></label>
+            <div class="member-editor">
+              <span class="field-label">Group members</span>
+              {#if group.members.length}
+                <ol class="member-list">
+                  {#each group.members as member, memberIndex}
+                    <li class="member-row">
+                      <span class:requested-member={memberIndex === 0} class="member-position">{memberIndex === 0 ? 'Requested' : memberIndex + 1}</span>
+                      <span class="member-name">{member}</span>
+                      <span class="member-actions">
+                        <button type="button" aria-label={`Move ${member} up`} title="Move up" disabled={memberIndex === 0} onclick={() => moveGroupMember(group, memberIndex, -1)}>↑</button>
+                        <button type="button" aria-label={`Move ${member} down`} title="Move down" disabled={memberIndex === group.members.length - 1} onclick={() => moveGroupMember(group, memberIndex, 1)}>↓</button>
+                        <button class="remove-member" type="button" aria-label={`Remove ${member} from group`} title="Remove from group" onclick={() => removeGroupMember(group, memberIndex)}>×</button>
+                      </span>
+                    </li>
+                  {/each}
+                </ol>
+              {:else}
+                <p class="member-empty">No songs selected yet.</p>
+              {/if}
+              <div class="song-picker">
+                <div class="search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                  <input bind:value={groupSearches[index]} type="search" placeholder="Search title, artist, or musical…" aria-label={`Search songs for group ${index + 1}`} autocomplete="off" />
+                </div>
+                {#if (groupSearches[index] || '').trim()}
+                  {@const results = groupSearchResults(group, index)}
+                  <div class="picker-results">
+                    {#if results.length}
+                      {#each results as song (song.rawTitle)}
+                        <button class="picker-option" type="button" onclick={() => addGroupMember(group, index, song.rawTitle)}>
+                          <span><strong>{song.title}</strong>{#if song.parenthetical}<small>{song.parenthetical}</small>{/if}</span>
+                          <small>{song.section}</small>
+                        </button>
+                      {/each}
+                    {:else}
+                      <p class="picker-empty">No available songs match that search.</p>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+              <small class="muted">A group needs at least two songs. Songs assigned to another group are hidden from results.</small>
+            </div>
             <button class="button secondary small" onclick={() => groups = groups.filter((_, i) => i !== index)}>Remove</button>
           </div>
         {/each}
