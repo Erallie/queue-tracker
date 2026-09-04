@@ -140,13 +140,17 @@
     min-width: 0;
   }
 
-  .markdown-editor :global(.cm-content) {
-    caret-color: transparent !important;
+  :global(.app-shell.light) .markdown-editor :global(.cm-content) {
+    caret-color: #000 !important;
   }
 
   :global(.app-shell.light) .markdown-editor :global(.cm-cursor),
   :global(.app-shell.light) .markdown-editor :global(.cm-dropCursor) {
     border-left-color: #000 !important;
+  }
+
+  :global(.app-shell.dark) .markdown-editor :global(.cm-content) {
+    caret-color: #fff !important;
   }
 
   :global(.app-shell.dark) .markdown-editor :global(.cm-cursor),
