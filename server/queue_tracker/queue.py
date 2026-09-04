@@ -34,6 +34,11 @@ class QueueBridge:
     async def close(self) -> None:
         if self.task:
             self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
+            self.task = None
         if self.socket and not self.socket.closed:
             await self.socket.close()
         if self.session and not self.session.closed:
@@ -85,7 +90,12 @@ class QueueBridge:
         data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
         has_queue_status = "queue_open" in payload or "queue_open" in data
         if has_queue_status:
-            self.queue_open = bool(payload["queue_open"] if "queue_open" in payload else data["queue_open"])
+            raw_queue_open = payload["queue_open"] if "queue_open" in payload else data["queue_open"]
+            queue_open = self._parse_queue_open(raw_queue_open)
+            if queue_open is not None:
+                if queue_open is not self.queue_open:
+                    logging.info("Request queue is now %s", "open" if queue_open else "closed")
+                self.queue_open = queue_open
         queue = payload.get("queue")
         if queue is None:
             queue = data.get("queue")
@@ -128,6 +138,21 @@ class QueueBridge:
             if listener.full():
                 listener.get_nowait()
             listener.put_nowait(snapshot)
+
+    @staticmethod
+    def _parse_queue_open(value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "open", "opened"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "closed", "close", ""}:
+                return False
+        logging.warning("Ignoring unrecognized queue_open value: %r", value)
+        return None
 
     @staticmethod
     def _first_slot_removed(previous: list[str], current: list[str]) -> str | None:

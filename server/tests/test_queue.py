@@ -78,6 +78,12 @@ class QueueRequestTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._handle({"cmd": "update", "queue": [], "queue_open": 0})
         self.assertIs(self.bridge.queue_open, False)
 
+    async def test_queue_update_parses_string_open_and_closed_state(self):
+        self.bridge._handle({"cmd": "update", "queue_open": "1"})
+        self.assertIs(self.bridge.queue_open, True)
+        self.bridge._handle({"cmd": "update", "queue_open": "0"})
+        self.assertIs(self.bridge.queue_open, False)
+
     async def test_status_only_update_is_published(self):
         listener = self.bridge.subscribe()
         await listener.get()
