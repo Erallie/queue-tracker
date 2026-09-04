@@ -60,6 +60,16 @@ class QueueRequestTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(self.bridge.socket.sent, [])
 
+    async def test_group_request_is_blocked_when_public_group_name_is_queued(self):
+        self.bridge.current_queue = [{"title": "Combined Song (Show)", "user": "Viewer"}]
+        with self.assertRaisesRegex(RuntimeError, "Song is already in the queue!"):
+            await self.bridge.request(
+                "Primary Version (Show)",
+                "Viewer",
+                ["Combined Song (Show)", "Primary Version (Show)", "Alternate Version (Show)"],
+            )
+        self.assertEqual(self.bridge.socket.sent, [])
+
     async def test_ungrouped_request_is_not_blocked_by_existing_title(self):
         self.bridge.current_queue = [{"title": "Song (Show)", "user": "Someone Else"}]
         pending = asyncio.create_task(self.bridge.request("Song (Show)", "Viewer"))

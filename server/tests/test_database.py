@@ -120,6 +120,20 @@ class DatabaseTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_group_request_titles_include_public_group_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Songs\nFirst (Show)\nSecond (Show)"})
+                store.save_groups([{"display_name": "Combined (Show)", "members": ["First (Show)", "Second (Show)"]}])
+                group = store.catalog()["songs"][0]
+                self.assertEqual(
+                    store.group_request_titles(group["id"]),
+                    ["Combined (Show)", "First (Show)", "Second (Show)"],
+                )
+            finally:
+                store.close()
+
     def test_decrement_restores_previous_last_played_time(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))

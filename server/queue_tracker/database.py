@@ -285,13 +285,20 @@ class Store:
     def group_request_titles(self, song_id: str) -> list[str]:
         if not song_id.startswith("group:"):
             return []
-        return [
+        group_id = song_id[6:]
+        group = self.db.execute(
+            "SELECT display_name FROM song_groups WHERE id=?", (group_id,)
+        ).fetchone()
+        titles = [
             row["raw_title"]
             for row in self.db.execute(
                 "SELECT raw_title FROM group_members WHERE group_id=? ORDER BY position",
-                (song_id[6:],),
+                (group_id,),
             )
         ]
+        if group and group["display_name"]:
+            titles.insert(0, group["display_name"])
+        return titles
 
     def record_play(self, raw_title: str, delta: int = 1) -> None:
         song = self.db.execute("SELECT play_count FROM songs WHERE raw_title=?", (raw_title,)).fetchone()
