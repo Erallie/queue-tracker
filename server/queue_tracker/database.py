@@ -229,7 +229,15 @@ class Store:
             else:
                 tags = self._tags_for([song["raw_title"]], bool(song["is_new"]))
                 output.append(self._song_json(song["id"], song["title"], song["parenthetical"], tags, bool(song["is_new"]), song["play_count"], song["last_played"]))
-        output.sort(key=lambda song: (not song["is_new"], -song["tag_points"], song["play_count"], alphabetical_key(song["parenthetical"]), alphabetical_key(song["title"])))
+        output.sort(key=lambda song: (
+            not song["is_new"],
+            -song["tag_points"],
+            bool(song["last_played"]),
+            song["last_played"][:10] if song["last_played"] else "",
+            song["play_count"],
+            alphabetical_key(song["parenthetical"]),
+            alphabetical_key(song["title"]),
+        ))
         return {"songs": output, "tags": self.tags()}
 
     def _tags_for(self, raw_titles: list[str], is_new: bool) -> list[str]:

@@ -7,6 +7,44 @@ from queue_tracker.database import Store
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_catalog_sort_prefers_never_played_then_oldest_played(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Songs\nRecent (Same)\nNever (Same)\nOldest (Same)"})
+                songs = {item["title"]: item for item in store.catalog()["songs"]}
+                with patch("queue_tracker.database.now", return_value="2026-01-01T12:00:00+00:00"):
+                    store.adjust_play(songs["Oldest"]["id"], 1)
+                with patch("queue_tracker.database.now", return_value="2026-09-01T12:00:00+00:00"):
+                    store.adjust_play(songs["Recent"]["id"], 1)
+
+                ordered = [item["title"] for item in store.catalog()["songs"]]
+                self.assertEqual(ordered, ["Never", "Oldest", "Recent"])
+            finally:
+                store.close()
+
+    def test_catalog_sort_uses_play_count_within_same_played_day(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Songs\nMore Plays (Zulu)\nFewer Plays (Alpha)\nSame Count B (Beta)\nSame Count A (Alpha)"})
+                songs = {item["title"]: item for item in store.catalog()["songs"]}
+                times = {
+                    "More Plays": ["2026-09-01T01:00:00+00:00", "2026-09-01T23:00:00+00:00"],
+                    "Fewer Plays": ["2026-09-01T22:00:00+00:00"],
+                    "Same Count B": ["2026-09-01T20:00:00+00:00"],
+                    "Same Count A": ["2026-09-01T21:00:00+00:00"],
+                }
+                for title, played_at_values in times.items():
+                    for played_at in played_at_values:
+                        with patch("queue_tracker.database.now", return_value=played_at):
+                            store.adjust_play(songs[title]["id"], 1)
+
+                ordered = [item["title"] for item in store.catalog()["songs"]]
+                self.assertEqual(ordered, ["Fewer Plays", "Same Count A", "Same Count B", "More Plays"])
+            finally:
+                store.close()
+
     def test_catalog_sort_ignores_leading_articles_without_changing_names(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))
