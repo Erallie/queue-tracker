@@ -96,7 +96,7 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 
 .queue-panel { overflow: hidden; }
 .queue-heading { margin-bottom: .8rem; }
-.queue-viewport { height: clamp(96px, 16vh, 190px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.queue-viewport { min-height: 3.5rem; }
 .queue-status { display: inline-flex; align-items: center; gap: .45rem; color: rgb(var(--muted)); font-size: .75rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
 .queue-status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--gold)); }
 .queue-status.connected::before { background: rgb(var(--green)); box-shadow: 0 0 0 4px rgba(var(--green), .14); }
@@ -179,7 +179,6 @@ code { color: rgb(var(--accent)); }
   main { width: min(100% - 1rem, 1240px); padding-top: 1.5rem; }
   .panel, .page-intro { padding: 1rem; }
   .queue-list { grid-template-columns: 1fr; }
-  .queue-viewport { height: 150px; }
   h1 { font-size: clamp(2rem, 12vw, 3.5rem); }
   th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5) { display: none; }
   .tracker-table th:nth-child(2), .tracker-table td:nth-child(2), .tracker-table th:nth-child(3), .tracker-table td:nth-child(3) { display: none; }
