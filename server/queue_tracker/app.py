@@ -7,6 +7,7 @@ import logging
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -34,6 +35,7 @@ class Service:
         self.http: aiohttp.ClientSession | None = None
         self.cookie_name = "queue_tracker_session"
         self.owner_identities = {item.strip() for item in os.getenv("OWNER_IDENTITIES", "").split(",") if item.strip()}
+        self.queue_event_tasks: set[asyncio.Task[Any]] = set()
 
     def app(self) -> web.Application:
         app = web.Application(middlewares=[self.cors])
@@ -55,6 +57,7 @@ class Service:
         app.router.add_get("/auth/{provider}", self.begin_auth)
         app.router.add_get("/auth/{provider}/callback", self.auth_callback)
         app.on_startup.append(self.startup)
+        app.on_shutdown.append(self.shutdown)
         app.on_cleanup.append(self.cleanup)
         return app
 
@@ -86,6 +89,13 @@ class Service:
         await self.queue.close()
         if self.http: await self.http.close()
         self.store.close()
+
+    async def shutdown(self, _app: web.Application) -> None:
+        tasks = list(self.queue_event_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     def user_id(self, request: web.Request) -> str | None:
         token = request.cookies.get(self.cookie_name, "")
@@ -143,6 +153,9 @@ class Service:
         response = web.StreamResponse(headers=headers)
         await response.prepare(request)
         listener = self.queue.subscribe()
+        task = asyncio.current_task()
+        if task:
+            self.queue_event_tasks.add(task)
         try:
             while True:
                 try:
@@ -155,6 +168,8 @@ class Service:
             pass
         finally:
             self.queue.unsubscribe(listener)
+            if task:
+                self.queue_event_tasks.discard(task)
         return response
 
     async def me(self, request: web.Request) -> web.Response:

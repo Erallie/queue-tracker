@@ -103,6 +103,11 @@ class QueueBridge:
             if has_queue_status:
                 self._publish_queue()
             return
+        # MustardMine includes queue_open while the queue is open and omits it
+        # from the full chan_queue update when the queue is closed.
+        if not has_queue_status and self.queue_open is not False:
+            self.queue_open = False
+            logging.info("Request queue is now closed")
         self.current_queue = [
             {
                 "title": str(item.get("title") or ""),
