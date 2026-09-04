@@ -103,14 +103,14 @@
               fontFamily: "'Montserrat', Arial, sans-serif",
               lineHeight: '1.55'
             },
-            '.cm-content': { padding: '1rem .9rem 3rem' },
-            '.cm-line': { padding: '0', margin: '0 0 .12rem' },
+            '.cm-line': { padding: '0 0 .12rem' },
             '.cm-gutters': { display: 'none' },
-            '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'rgb(var(--foreground))' },
+            '.cm-content': { padding: '1rem .9rem 3rem' },
+            '&.cm-focused .cm-cursor, .cm-dropCursor': { borderLeftColor: 'rgb(var(--foreground)) !important' },
             '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
               backgroundColor: 'rgba(var(--accent), .25)'
             },
-            '.cm-live-heading': { fontWeight: '700', marginTop: '.85rem', marginBottom: '.25rem' },
+            '.cm-live-heading': { fontWeight: '700', paddingTop: '.85rem', paddingBottom: '.25rem' },
             '.cm-live-heading-1': { fontSize: '1.7rem', lineHeight: '1.3' },
             '.cm-live-heading-2': { fontSize: '1.35rem', lineHeight: '1.35' },
             '.cm-live-heading-3': { fontSize: '1.15rem' },
