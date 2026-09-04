@@ -81,6 +81,11 @@
       const textMatch = !needle || normalizeSearch(`${song.title} ${song.parenthetical}`).includes(needle);
       const tagMatch = trackerTags.every((tag) => song.tags.includes(tag));
       return textMatch && tagMatch;
+    }).sort((a, b) => {
+      if (!a.last_played && !b.last_played) return 0;
+      if (!a.last_played) return 1;
+      if (!b.last_played) return -1;
+      return Date.parse(b.last_played) - Date.parse(a.last_played);
     });
   });
 
