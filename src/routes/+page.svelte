@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { getAccount, getCatalog, getQueue, requestSong, watchQueue } from '$lib/api';
   import { normalizeSearch } from '$lib/search';
+  import { relativeTime } from '$lib/time';
   import type { Account, Catalog, QueueState, Song } from '$lib/types';
 
   let catalog = $state<Catalog>({ songs: [], tags: [] });
@@ -14,6 +15,7 @@
   let requesting = $state('');
   let message = $state('');
   let error = $state('');
+  let clock = $state(Date.now());
 
   const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
   const filtered = $derived.by(() => {
@@ -27,11 +29,6 @@
 
   function toggleTag(tag: string) {
     selectedTags = selectedTags.includes(tag) ? selectedTags.filter((item) => item !== tag) : [...selectedTags, tag];
-  }
-
-  function dateLabel(value: string | null) {
-    if (!value) return 'Not yet';
-    return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
   }
 
   async function queue(song: Song) {
@@ -48,6 +45,7 @@
   onMount(() => {
     let alive = true;
     let receivedLiveQueue = false;
+    const clockTimer = window.setInterval(() => { clock = Date.now(); }, 60_000);
     const stopWatching = watchQueue((next) => {
       receivedLiveQueue = true;
       queueState = next;
@@ -63,6 +61,7 @@
     });
     return () => {
       alive = false;
+      window.clearInterval(clockTimer);
       stopWatching();
     };
   });
@@ -136,7 +135,7 @@
               <td><div class="song-title">{song.title}</div></td>
               <td class="song-parenthetical">{song.parenthetical || 'Original'}</td>
               <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
-              <td>{dateLabel(song.last_played)}</td>
+              <td>{relativeTime(song.last_played, clock)}</td>
               <td class="number">{song.play_count}</td>
               <td class="request-cell"><button class="button small" disabled={requesting === song.id} onclick={() => queue(song)}>{requesting === song.id ? 'Sending…' : account.authenticated ? 'Request' : 'Sign in'}</button></td>
             </tr>

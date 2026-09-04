@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from queue_tracker.database import Store
 
@@ -53,6 +54,96 @@ class DatabaseTests(unittest.TestCase):
                     if item["id"] == song["id"]
                 )
                 self.assertEqual(updated["play_count"], 0)
+            finally:
+                store.close()
+
+    def test_decrement_restores_previous_last_played_time(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                song = next(item for item in store.catalog()["songs"] if item["title"] == "Pandemonium")
+                first = "2026-08-01T12:00:00+00:00"
+                second = "2026-09-01T18:30:00+00:00"
+                with patch("queue_tracker.database.now", side_effect=[first, second]):
+                    store.adjust_play(song["id"], 1)
+                    store.adjust_play(song["id"], 1)
+
+                played_twice = next(item for item in store.catalog()["songs"] if item["id"] == song["id"])
+                self.assertEqual(played_twice["last_played"], second)
+                self.assertEqual(played_twice["play_count"], 2)
+
+                store.adjust_play(song["id"], -1)
+                rolled_back = next(item for item in store.catalog()["songs"] if item["id"] == song["id"])
+                self.assertEqual(rolled_back["last_played"], first)
+                self.assertEqual(rolled_back["play_count"], 1)
+            finally:
+                store.close()
+
+    def test_group_decrement_removes_latest_member_play(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Songs\nFirst (Show)\nSecond (Show)"})
+                store.save_groups([{"display_name": "Combined (Show)", "members": ["First (Show)", "Second (Show)"]}])
+                group = store.catalog()["songs"][0]
+                with patch("queue_tracker.database.now", return_value="2026-08-01T12:00:00+00:00"):
+                    store.record_play("First (Show)")
+                with patch("queue_tracker.database.now", return_value="2026-09-01T18:30:00+00:00"):
+                    store.record_play("Second (Show)")
+
+                store.adjust_play(group["id"], -1)
+                rolled_back = store.catalog()["songs"][0]
+                self.assertEqual(rolled_back["last_played"], "2026-08-01T12:00:00+00:00")
+                self.assertEqual(rolled_back["play_count"], 1)
+            finally:
+                store.close()
+
+    def test_group_shares_one_limited_date_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({
+                    "song_text": "# Songs\nFirst (Show)\nSecond (Show)",
+                    "last_played_history_limit": 2,
+                })
+                store.save_groups([{"display_name": "Combined (Show)", "members": ["First (Show)", "Second (Show)"]}])
+                group = store.catalog()["songs"][0]
+                times = [
+                    "2026-07-01T12:00:00+00:00",
+                    "2026-08-01T12:00:00+00:00",
+                    "2026-09-01T12:00:00+00:00",
+                ]
+                with patch("queue_tracker.database.now", return_value=times[0]):
+                    store.record_play("First (Show)")
+                with patch("queue_tracker.database.now", return_value=times[1]):
+                    store.record_play("Second (Show)")
+                with patch("queue_tracker.database.now", return_value=times[2]):
+                    store.record_play("First (Show)")
+
+                current = store.catalog()["songs"][0]
+                self.assertEqual(current["play_count"], 3)
+                self.assertEqual(current["last_played"], times[2])
+                member_dates = {
+                    row["last_played"]
+                    for row in store.db.execute(
+                        "SELECT last_played FROM songs WHERE raw_title IN ('First (Show)','Second (Show)')"
+                    )
+                }
+                self.assertEqual(member_dates, {times[2]})
+                retained = store.db.execute(
+                    "SELECT COUNT(*) FROM play_events WHERE raw_title IN ('First (Show)','Second (Show)')"
+                ).fetchone()[0]
+                self.assertEqual(retained, 2)
+
+                store.adjust_play(group["id"], -1)
+                previous = store.catalog()["songs"][0]
+                self.assertEqual(previous["play_count"], 2)
+                self.assertEqual(previous["last_played"], times[1])
+
+                store.adjust_play(group["id"], -1)
+                beyond_retained_history = store.catalog()["songs"][0]
+                self.assertEqual(beyond_retained_history["play_count"], 1)
+                self.assertIsNone(beyond_retained_history["last_played"])
             finally:
                 store.close()
 

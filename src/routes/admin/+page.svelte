@@ -2,11 +2,12 @@
   import { onMount } from 'svelte';
   import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
   import { normalizeSearch } from '$lib/search';
+  import { relativeTime } from '$lib/time';
   import type { Account, Catalog, Settings, SongGroup } from '$lib/types';
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, queue_websocket_url: '', queue_group: '' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, queue_websocket_url: '', queue_group: '' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let loading = $state(true);
@@ -19,6 +20,12 @@
   let trackerQuery = $state('');
   let trackerTags = $state<string[]>([]);
   let removingNew = $state('');
+  let clock = $state(Date.now());
+
+  onMount(() => {
+    const timer = window.setInterval(() => { clock = Date.now(); }, 60_000);
+    return () => window.clearInterval(timer);
+  });
 
   type GroupSongOption = {
     rawTitle: string;
@@ -320,9 +327,9 @@
             <tr>
               <td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td>
               <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
-              <td>{song.last_played || 'Not yet'}</td>
+              <td>{relativeTime(song.last_played, clock)}</td>
               <td class="number">{song.play_count}</td>
-              <td><div class="actions tracker-actions"><button class="button secondary small" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { await adjustPlay(song.id, -1); song.play_count = Math.max(0, song.play_count - 1); }}>−</button><button class="button small" aria-label={`Increase plays for ${song.title}`} onclick={async () => { await adjustPlay(song.id, 1); song.play_count += 1; }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
+              <td><div class="actions tracker-actions"><button class="button secondary small" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, -1); Object.assign(song, result.song); }}>−</button><button class="button small" aria-label={`Increase plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, 1); Object.assign(song, result.song); }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
             </tr>
           {/each}
         </tbody></table></div>
@@ -333,6 +340,7 @@
         <label>Plays before a song graduates from New<input type="number" min="1" bind:value={settings.new_play_threshold} /></label>
         <label>Minimum days a song stays New<input type="number" min="0" bind:value={settings.new_min_days} /></label>
         <label>Days to retain recently graduated data<input type="number" min="0" bind:value={settings.recently_graduated_days} /></label>
+        <label>Last-played dates retained per song<input type="number" min="1" bind:value={settings.last_played_history_limit} /></label>
         <label>Queue group<input bind:value={settings.queue_group} /></label>
         <label class="full">Queue WebSocket URL<input type="url" bind:value={settings.queue_websocket_url} /></label>
       </div>

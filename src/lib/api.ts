@@ -58,5 +58,5 @@ export async function saveSettings(settings: Settings): Promise<void> { await re
 export async function saveGroups(groups: SongGroup[]): Promise<void> { await request('/api/admin/groups', { method: 'PUT', body: JSON.stringify({ groups }) }); }
 export async function saveTags(tags: Catalog['tags']): Promise<void> { await request('/api/admin/tags', { method: 'PUT', body: JSON.stringify({ tags }) }); }
 export async function saveSongTags(songId: string, tags: string[]): Promise<void> { await request(`/api/admin/songs/${songId}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }); }
-export async function adjustPlay(songId: string, delta: number): Promise<void> { await request(`/api/admin/songs/${songId}/plays`, { method: 'POST', body: JSON.stringify({ delta }) }); }
+export async function adjustPlay(songId: string, delta: number): Promise<{ song: Catalog['songs'][number] }> { return request(`/api/admin/songs/${songId}/plays`, { method: 'POST', body: JSON.stringify({ delta }) }); }
 export async function removeNewTag(songId: string): Promise<void> { await request(`/api/admin/songs/${songId}/new`, { method: 'DELETE' }); }

@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
     "new_play_threshold": 2,
     "new_min_days": 14,
     "recently_graduated_days": 7,
+    "last_played_history_limit": 10,
     "queue_websocket_url": "wss://sikorsky.mustardmine.com/ws",
     "queue_group": "#275206561",
 }
@@ -80,9 +81,14 @@ class Store:
           id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
           raw_title TEXT NOT NULL, request_name TEXT NOT NULL, requested_at TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'queued');
+        CREATE TABLE IF NOT EXISTS play_events(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          raw_title TEXT NOT NULL REFERENCES songs(raw_title) ON DELETE CASCADE,
+          played_at TEXT);
         CREATE INDEX IF NOT EXISTS idx_songs_active_new ON songs(active, is_new);
         CREATE INDEX IF NOT EXISTS idx_group_members_title ON group_members(raw_title);
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_play_events_song_time ON play_events(raw_title, played_at);
         """)
         tag_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(tags)")}
         if "position" not in tag_columns:
@@ -98,11 +104,22 @@ class Store:
         if not self.db.execute("SELECT 1 FROM songs LIMIT 1").fetchone():
             self.sync_songs(str(self.settings()["song_text"]))
             self.db.commit()
+        # Preserve the one legacy date that is known without inventing dates for
+        # older plays. The aggregate play_count remains authoritative.
+        for song in self.db.execute("SELECT raw_title,play_count,last_played FROM songs WHERE play_count>0"):
+            if song["last_played"] and not self.db.execute("SELECT 1 FROM play_events WHERE raw_title=? LIMIT 1", (song["raw_title"],)).fetchone():
+                self.db.execute(
+                    "INSERT INTO play_events(raw_title,played_at) VALUES(?,?)",
+                    (song["raw_title"], song["last_played"]),
+                )
+        self.db.commit()
         if not self.db.execute("SELECT 1 FROM song_groups LIMIT 1").fetchone():
             self.save_groups([
                 {"display_name": "Somewhere Over the Rainbow (Judy Garland)", "members": ["Somewhere Over the Rainbow - Jazz Cover (The Wizard of Oz)", "Somewhere Over the Rainbow (Judy Garland)"]},
                 {"display_name": "Crossing the Line (Rapunzel's Tangled Adventure)", "members": ["Crossing the Line (Rapunzel's Tangled Adventure)", "Crossing the Line (Tangled the Series)"]},
             ])
+        self._trim_all_play_history()
+        self.db.commit()
 
     def close(self) -> None:
         self.db.close()
@@ -115,9 +132,12 @@ class Store:
         allowed = DEFAULT_SETTINGS.keys()
         for key in allowed:
             if key in values:
-                self.db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(values[key])))
+                value = max(1, int(values[key])) if key == "last_played_history_limit" else values[key]
+                self.db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(value)))
         if "song_text" in values:
             self.sync_songs(str(values["song_text"]))
+        if "last_played_history_limit" in values:
+            self._trim_all_play_history()
         self.db.commit()
 
     def sync_songs(self, text: str) -> None:
@@ -152,6 +172,7 @@ class Store:
                 continue
             self.db.execute("INSERT INTO song_groups VALUES(?,?,?)", (group_id, name, position))
             self.db.executemany("INSERT INTO group_members VALUES(?,?,?)", ((group_id, member, index) for index, member in enumerate(members)))
+        self._trim_all_play_history()
         self.db.commit()
 
     def groups(self) -> list[dict[str, Any]]:
@@ -226,7 +247,7 @@ class Store:
         for tag in tags:
             row = self.db.execute("SELECT points FROM tags WHERE name=?", (tag,)).fetchone()
             points += row[0] if row else 0
-        value = {"id": song_id, "title": title, "parenthetical": parenthetical, "tags": tags, "is_new": is_new, "tag_points": points, "play_count": play_count, "last_played": last_played[:10] if last_played else None}
+        value = {"id": song_id, "title": title, "parenthetical": parenthetical, "tags": tags, "is_new": is_new, "tag_points": points, "play_count": play_count, "last_played": last_played}
         return value
 
     def request_title(self, song_id: str) -> str | None:
@@ -237,12 +258,119 @@ class Store:
         return row[0] if row else None
 
     def record_play(self, raw_title: str, delta: int = 1) -> None:
-        self.db.execute("UPDATE songs SET play_count=MAX(0,play_count+?),last_played=CASE WHEN ?>0 THEN ? ELSE last_played END WHERE raw_title=?", (delta, delta, now(), raw_title))
+        song = self.db.execute("SELECT play_count FROM songs WHERE raw_title=?", (raw_title,)).fetchone()
+        if not song:
+            return
+        if delta > 0:
+            played_at = now()
+            self.db.execute("UPDATE songs SET play_count=play_count+? WHERE raw_title=?", (delta, raw_title))
+            self.db.executemany(
+                "INSERT INTO play_events(raw_title,played_at) VALUES(?,?)",
+                ((raw_title, played_at) for _ in range(delta)),
+            )
+        elif delta < 0:
+            decrement = min(-delta, song["play_count"])
+            rows = self.db.execute(
+                """SELECT id FROM play_events WHERE raw_title=?
+                   ORDER BY played_at IS NULL, played_at DESC, id DESC LIMIT ?""",
+                (raw_title, decrement),
+            ).fetchall()
+            self.db.executemany("DELETE FROM play_events WHERE id=?", ((row["id"],) for row in rows))
+            self.db.execute("UPDATE songs SET play_count=MAX(0,play_count-?) WHERE raw_title=?", (decrement, raw_title))
+        history_titles = self._history_titles_for_raw_title(raw_title)
+        self._trim_play_history(history_titles)
+        self._refresh_last_played(history_titles)
         self.db.commit()
 
+    def _refresh_last_played(self, raw_titles: list[str]) -> None:
+        if not raw_titles:
+            return
+        placeholders = ",".join("?" for _ in raw_titles)
+        summary = self.db.execute(
+            f"SELECT MAX(played_at) AS last_played FROM play_events WHERE raw_title IN ({placeholders})",
+            tuple(raw_titles),
+        ).fetchone()
+        self.db.execute(
+            f"UPDATE songs SET last_played=? WHERE raw_title IN ({placeholders})",
+            (summary["last_played"], *raw_titles),
+        )
+
+    def _history_titles_for_raw_title(self, raw_title: str) -> list[str]:
+        group = self.db.execute(
+            "SELECT group_id FROM group_members WHERE raw_title=? LIMIT 1", (raw_title,)
+        ).fetchone()
+        if not group:
+            return [raw_title]
+        return [
+            row["raw_title"]
+            for row in self.db.execute(
+                "SELECT raw_title FROM group_members WHERE group_id=? ORDER BY position",
+                (group["group_id"],),
+            )
+        ]
+
+    def _trim_play_history(self, raw_titles: list[str]) -> None:
+        if not raw_titles:
+            return
+        limit = max(1, int(self.settings()["last_played_history_limit"]))
+        placeholders = ",".join("?" for _ in raw_titles)
+        rows = self.db.execute(
+            f"""SELECT id FROM play_events WHERE raw_title IN ({placeholders})
+                ORDER BY played_at IS NULL, played_at DESC, id DESC""",
+            tuple(raw_titles),
+        ).fetchall()
+        self.db.executemany("DELETE FROM play_events WHERE id=?", ((row["id"],) for row in rows[limit:]))
+
+    def _trim_all_play_history(self) -> None:
+        grouped: set[str] = set()
+        for group in self.db.execute("SELECT id FROM song_groups"):
+            titles = [
+                row["raw_title"]
+                for row in self.db.execute("SELECT raw_title FROM group_members WHERE group_id=?", (group["id"],))
+            ]
+            grouped.update(titles)
+            self._trim_play_history(titles)
+            self._refresh_last_played(titles)
+        for song in self.db.execute("SELECT raw_title FROM songs"):
+            if song["raw_title"] not in grouped:
+                self._trim_play_history([song["raw_title"]])
+                self._refresh_last_played([song["raw_title"]])
+
+    def _titles_for_song_id(self, song_id: str) -> list[str]:
+        if song_id.startswith("group:"):
+            return [
+                row["raw_title"]
+                for row in self.db.execute(
+                    "SELECT raw_title FROM group_members WHERE group_id=? ORDER BY position",
+                    (song_id[6:],),
+                )
+            ]
+        row = self.db.execute("SELECT raw_title FROM songs WHERE id=? AND active=1", (song_id,)).fetchone()
+        return [row["raw_title"]] if row else []
+
     def adjust_play(self, song_id: str, delta: int) -> None:
-        title = self.request_title(song_id)
-        if title: self.record_play(title, delta)
+        titles = self._titles_for_song_id(song_id)
+        if not titles or delta == 0:
+            return
+        if delta > 0:
+            self.record_play(titles[0], delta)
+            return
+        placeholders = ",".join("?" for _ in titles)
+        latest = self.db.execute(
+            f"""SELECT raw_title FROM play_events WHERE raw_title IN ({placeholders})
+                ORDER BY played_at IS NULL, played_at DESC, id DESC LIMIT 1""",
+            tuple(titles),
+        ).fetchone()
+        if latest:
+            target = latest["raw_title"]
+        else:
+            target_row = self.db.execute(
+                f"SELECT raw_title FROM songs WHERE raw_title IN ({placeholders}) AND play_count>0 ORDER BY last_played DESC LIMIT 1",
+                tuple(titles),
+            ).fetchone()
+            target = target_row["raw_title"] if target_row else None
+        if target:
+            self.record_play(target, delta)
 
     def remove_new_tag(self, song_id: str) -> bool:
         if song_id.startswith("group:"):

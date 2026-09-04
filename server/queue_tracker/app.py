@@ -221,7 +221,15 @@ class Service:
         self.store.save_song_tags(raw, body.get("tags", [])); return web.json_response({"ok": True})
 
     async def adjust_play(self, request: web.Request) -> web.Response:
-        self.require_admin(request); body = await self.json(request); delta = max(-1, min(1, int(body.get("delta", 0)))); self.store.adjust_play(request.match_info["song_id"], delta); return web.json_response({"ok": True})
+        self.require_admin(request)
+        body = await self.json(request)
+        delta = max(-1, min(1, int(body.get("delta", 0))))
+        song_id = request.match_info["song_id"]
+        self.store.adjust_play(song_id, delta)
+        song = next((item for item in self.store.catalog()["songs"] if item["id"] == song_id), None)
+        if not song:
+            raise web.HTTPNotFound(text='{"error":"Song not found"}', content_type="application/json")
+        return web.json_response({"song": song})
 
     async def remove_new_tag(self, request: web.Request) -> web.Response:
         self.require_admin(request)
