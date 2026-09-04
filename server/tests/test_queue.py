@@ -78,6 +78,13 @@ class QueueRequestTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._handle({"cmd": "update", "queue": [], "queue_open": 0})
         self.assertIs(self.bridge.queue_open, False)
 
+    async def test_status_only_update_is_published(self):
+        listener = self.bridge.subscribe()
+        await listener.get()
+        self.bridge._handle({"cmd": "update", "queue_open": 0})
+        self.assertEqual(await asyncio.wait_for(listener.get(), timeout=0.1), [])
+        self.assertIs(self.bridge.queue_open, False)
+
     async def test_request_command_cannot_be_overridden(self):
         pending = asyncio.create_task(self.bridge.request("Song (Show)", "Viewer"))
         await asyncio.sleep(0)

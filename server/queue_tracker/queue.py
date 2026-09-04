@@ -82,12 +82,16 @@ class QueueBridge:
             return
         if payload.get("cmd") != "update":
             return
-        if "queue_open" in payload:
-            self.queue_open = bool(payload["queue_open"])
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        has_queue_status = "queue_open" in payload or "queue_open" in data
+        if has_queue_status:
+            self.queue_open = bool(payload["queue_open"] if "queue_open" in payload else data["queue_open"])
         queue = payload.get("queue")
-        if queue is None and isinstance(payload.get("data"), dict):
-            queue = payload["data"].get("queue")
+        if queue is None:
+            queue = data.get("queue")
         if not isinstance(queue, list):
+            if has_queue_status:
+                self._publish_queue()
             return
         self.current_queue = [
             {
