@@ -5,7 +5,7 @@
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, queue_websocket_url: '', queue_group: '', request_command: 'choose' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, queue_websocket_url: '', queue_group: '' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let loading = $state(true);
@@ -334,7 +334,6 @@
         <label>Days to retain recently graduated data<input type="number" min="0" bind:value={settings.recently_graduated_days} /></label>
         <label>Queue group<input bind:value={settings.queue_group} /></label>
         <label class="full">Queue WebSocket URL<input type="url" bind:value={settings.queue_websocket_url} /></label>
-        <label>Request command<input bind:value={settings.request_command} /></label>
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Settings saved')}>Save settings</button></div>
     {/if}

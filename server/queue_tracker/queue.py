@@ -18,9 +18,11 @@ class QueueBridge:
         self.socket: aiohttp.ClientWebSocketResponse | None = None
         self.task: asyncio.Task[None] | None = None
         self.previous: list[str] = []
+        self.current_queue: list[dict[str, str]] = []
         self.connected = False
         self._send_lock = asyncio.Lock()
         self._choose_reply: asyncio.Future[dict[str, Any]] | None = None
+        self._choose_expected: tuple[str, str, int] | None = None
         self.auth_cookie = os.getenv("MUSTARDMINE_COOKIE", "").strip()
 
     async def start(self) -> None:
@@ -47,6 +49,7 @@ class QueueBridge:
                     self.socket = socket
                     self.connected = True
                     delay = 2
+                    logging.info("Queue WebSocket connected (request authentication configured: %s)", bool(self.auth_cookie))
                     await socket.send_json({"cmd": "init", "type": "chan_queue", "group": settings["queue_group"]})
                     async for message in socket:
                         if message.type == aiohttp.WSMsgType.TEXT:
@@ -67,6 +70,8 @@ class QueueBridge:
 
     def _handle(self, payload: dict[str, Any]) -> None:
         if payload.get("cmd") == "choose":
+            if payload.get("error"):
+                logging.warning("MustardMine rejected a queue request: %s", payload["error"])
             if self._choose_reply and not self._choose_reply.done():
                 self._choose_reply.set_result(payload)
             return
@@ -77,7 +82,17 @@ class QueueBridge:
             queue = payload["data"].get("queue")
         if not isinstance(queue, list):
             return
-        current = [str(item.get("title") or "") for item in queue if isinstance(item, dict) and item.get("title")]
+        self.current_queue = [
+            {"title": str(item.get("title") or ""), "user": str(item.get("user") or "")}
+            for item in queue
+            if isinstance(item, dict) and item.get("title")
+        ]
+        if self._choose_reply and not self._choose_reply.done() and self._choose_expected:
+            title, request_name, previous_count = self._choose_expected
+            current_count = sum(item["title"] == title and item["user"] == request_name for item in self.current_queue)
+            if current_count > previous_count:
+                self._choose_reply.set_result({"cmd": "choose", "selection": title, "confirmed_by": "queue_update"})
+        current = [item["title"] for item in self.current_queue]
         removed = self._first_slot_removed(self.previous, current)
         self.previous = current
         if removed:
@@ -100,23 +115,28 @@ class QueueBridge:
     async def request(self, title: str, request_name: str) -> None:
         if not self.auth_cookie:
             raise RuntimeError("Song requests are not configured on the server")
-        settings = self.store.settings()
-        payload = {"cmd": settings["request_command"], "selection": title, "added_for": request_name}
+        payload = {"cmd": "choose", "selection": title, "added_for": request_name}
         async with self._send_lock:
             if not self.socket or self.socket.closed:
                 raise RuntimeError("The request queue is temporarily disconnected")
             reply = asyncio.get_running_loop().create_future()
             self._choose_reply = reply
+            previous_count = sum(item["title"] == title and item["user"] == request_name for item in self.current_queue)
+            self._choose_expected = (title, request_name, previous_count)
             try:
+                logging.info("Sending MustardMine queue request for %r on behalf of %r", title, request_name)
                 await self.socket.send_json(payload)
                 result = await asyncio.wait_for(reply, timeout=10)
             except TimeoutError as error:
+                logging.warning("MustardMine did not confirm the queue request for %r", title)
                 raise RuntimeError("The request queue did not confirm the request") from error
             finally:
                 if self._choose_reply is reply:
                     self._choose_reply = None
+                    self._choose_expected = None
             if result.get("error"):
                 raise RuntimeError(str(result["error"]))
+            logging.info("MustardMine confirmed the queue request for %r", result.get("selection") or title)
 
 
 async def hourly_maintenance(store: Store) -> None:

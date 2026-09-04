@@ -31,8 +31,7 @@ export const demoSettings: Settings = {
   new_min_days: 14,
   recently_graduated_days: 7,
   queue_websocket_url: 'wss://sikorsky.mustardmine.com/ws',
-  queue_group: '#275206561',
-  request_command: 'choose'
+  queue_group: '#275206561'
 };
 
 export const demoGroups: SongGroup[] = [

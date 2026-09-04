@@ -34,7 +34,6 @@ export type Settings = {
   recently_graduated_days: number;
   queue_websocket_url: string;
   queue_group: string;
-  request_command: string;
 };
 
 export type SongGroup = {

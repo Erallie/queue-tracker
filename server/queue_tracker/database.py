@@ -23,7 +23,6 @@ DEFAULT_SETTINGS = {
     "recently_graduated_days": 7,
     "queue_websocket_url": "wss://sikorsky.mustardmine.com/ws",
     "queue_group": "#275206561",
-    "request_command": "choose",
 }
 
 

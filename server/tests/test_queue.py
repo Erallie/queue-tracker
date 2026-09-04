@@ -17,7 +17,7 @@ class QueueTests(unittest.TestCase):
 
 class FakeStore:
     def settings(self):
-        return {"request_command": "choose"}
+        return {}
 
 
 class FakeSocket:
@@ -49,6 +49,19 @@ class QueueRequestTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._handle({"cmd": "choose", "error": "Not logged in"})
         with self.assertRaisesRegex(RuntimeError, "Not logged in"):
             await pending
+
+    async def test_queue_update_can_confirm_request(self):
+        pending = asyncio.create_task(self.bridge.request("Song (Show)", "Viewer"))
+        await asyncio.sleep(0)
+        self.bridge._handle({"cmd": "update", "queue": [{"title": "Song (Show)", "user": "Viewer"}]})
+        await pending
+
+    async def test_request_command_cannot_be_overridden(self):
+        pending = asyncio.create_task(self.bridge.request("Song (Show)", "Viewer"))
+        await asyncio.sleep(0)
+        self.bridge._handle({"cmd": "choose", "selection": "Song (Show)"})
+        await pending
+        self.assertEqual(self.bridge.socket.sent[0]["cmd"], "choose")
 
 
 if __name__ == "__main__":
