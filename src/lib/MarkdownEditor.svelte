@@ -11,15 +11,16 @@
 
   function livePreview(view: EditorView): DecorationSet {
     const decorations: Range<Decoration>[] = [];
-    const touches = (from: number, to: number) => view.state.selection.ranges.some((range) => range.from <= to + 1 && range.to >= from - 1);
+    const touches = (from: number, to: number) => view.state.selection.ranges.some((range) => range.from <= to && range.to >= from);
 
     for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
       const line = view.state.doc.line(lineNumber);
       const heading = /^(#{1,6})([\t ]+)/.exec(line.text);
       if (heading) {
         const level = heading[1].length;
+        const headingEnd = line.from + line.text.trimEnd().length;
         decorations.push(Decoration.line({ attributes: { class: `cm-live-heading cm-live-heading-${level}` } }).range(line.from));
-        if (!touches(line.from, line.to)) {
+        if (!touches(line.from, headingEnd)) {
           decorations.push(Decoration.replace({}).range(line.from, line.from + heading[0].length));
         }
       }
