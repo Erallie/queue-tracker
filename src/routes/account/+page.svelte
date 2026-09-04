@@ -8,9 +8,9 @@
   let status = $state('');
   let error = $state('');
   const providers = [
-    { id: 'twitch', name: 'Twitch', letter: 'T', color: '#9146ff' },
-    { id: 'discord', name: 'Discord', letter: 'D', color: '#5865f2' },
-    { id: 'google', name: 'Google', letter: 'G', color: '#4285f4' }
+    { id: 'twitch', name: 'Twitch', letter: 'T', color: '#ab212a' },
+    { id: 'discord', name: 'Discord', letter: 'D', color: '#14743d' },
+    { id: 'google', name: 'Google', letter: 'G', color: '#b7843a' }
   ];
 
   function identity(provider: string) { return me.identities.find((item) => item.provider === provider); }

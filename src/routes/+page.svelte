@@ -13,7 +13,7 @@
   let message = $state('');
   let error = $state('');
 
-  const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#8061c9'])));
+  const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
   const filtered = $derived.by(() => {
     const needle = query.trim().toLocaleLowerCase();
     return catalog.songs.filter((song) => {
@@ -90,7 +90,7 @@
             <tr>
               <td><div class="song-title">{song.title}</div></td>
               <td class="song-parenthetical">{song.parenthetical || 'Original'}</td>
-              <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#8061c9'}`}>{tag}</span>{/each}</div></td>
+              <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
               <td>{dateLabel(song.last_played)}</td>
               <td class="number">{song.play_count}</td>
               <td class="request-cell"><button class="button small" disabled={requesting === song.id} onclick={() => queue(song)}>{requesting === song.id ? 'Sending…' : account.authenticated ? 'Request' : 'Sign in'}</button></td>

@@ -53,7 +53,7 @@
 
   function addGroup() { groups = [...groups, { display_name: '', members: ['', ''] }]; }
   function setMembers(group: SongGroup, value: string) { group.members = value.split('\n').map((line) => line.trim()).filter(Boolean); }
-  function addTag() { catalog.tags = [...catalog.tags, { name: 'New tag', points: 0, color: '#8061c9' }]; }
+  function addTag() { catalog.tags = [...catalog.tags, { name: 'New tag', points: 0, color: '#ab212a' }]; }
   function toggleSongTag(songId: string, tag: string, checked: boolean) {
     const song = catalog.songs.find((item) => item.id === songId);
     if (!song) return;

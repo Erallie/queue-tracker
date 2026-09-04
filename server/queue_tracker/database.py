@@ -63,7 +63,7 @@ class Store:
           group_id TEXT NOT NULL REFERENCES song_groups(id) ON DELETE CASCADE,
           raw_title TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(group_id, raw_title));
         CREATE TABLE IF NOT EXISTS tags(
-          name TEXT PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0, color TEXT NOT NULL DEFAULT '#8061c9');
+          name TEXT PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0, color TEXT NOT NULL DEFAULT '#ab212a');
         CREATE TABLE IF NOT EXISTS song_tags(
           raw_title TEXT NOT NULL REFERENCES songs(raw_title) ON DELETE CASCADE,
           tag_name TEXT NOT NULL REFERENCES tags(name) ON DELETE CASCADE,
@@ -156,7 +156,7 @@ class Store:
             if not name:
                 continue
             keep.add(name)
-            self.db.execute("INSERT INTO tags VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET points=excluded.points,color=excluded.color", (name, int(tag.get("points") or 0), str(tag.get("color") or "#8061c9")))
+            self.db.execute("INSERT INTO tags VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET points=excluded.points,color=excluded.color", (name, int(tag.get("points") or 0), str(tag.get("color") or "#ab212a")))
         placeholders = ",".join("?" for _ in keep)
         self.db.execute(f"DELETE FROM tags WHERE name NOT IN ({placeholders})", tuple(keep))
         self.db.commit()
