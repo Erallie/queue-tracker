@@ -91,24 +91,6 @@
 
 <svelte:head>
     <title>Erallie's Song Queue</title>
-
-	<meta name="description" content="Request songs and view the request queue for Erallie's Sing Streams!" />
-	<meta property="og:title" content="Erallie's Song Queue" />
-	<meta property="og:description" content="Request songs and view the request queue for Erallie's Sing Streams!" />
-	<meta property="og:image" content="https://songlist.gozarproductions.com/banner-preview.png" />
-	<meta property="og:image:width" content="1200" />
-	<meta property="og:image:height" content="630" />
-	<meta property="og:image:type" content="image/png" />
-	<meta property="og:url" content="https://songlist.gozarproductions.com" />
-	<meta property="og:site_name" content="Erallie's Song Queue" />
-	<meta property="og:type" content="website" />
-
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Erallie's Song Queue" />
-	<meta name="twitter:description" content="Request songs and view the request queue for Erallie's Sing Streams!" />
-	<meta name="twitter:image" content="https://songlist.gozarproductions.com/banner-preview.png" />
-
-	<link rel="canonical" href="https://songlist.gozarproductions.com" />
 </svelte:head>
 
 <section class="page-intro">
