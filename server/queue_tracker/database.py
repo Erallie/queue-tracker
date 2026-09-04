@@ -274,6 +274,17 @@ class Store:
             row = self.db.execute("SELECT raw_title FROM songs WHERE id=? AND active=1", (song_id,)).fetchone()
         return row[0] if row else None
 
+    def group_request_titles(self, song_id: str) -> list[str]:
+        if not song_id.startswith("group:"):
+            return []
+        return [
+            row["raw_title"]
+            for row in self.db.execute(
+                "SELECT raw_title FROM group_members WHERE group_id=? ORDER BY position",
+                (song_id[6:],),
+            )
+        ]
+
     def record_play(self, raw_title: str, delta: int = 1) -> None:
         song = self.db.execute("SELECT play_count FROM songs WHERE raw_title=?", (raw_title,)).fetchone()
         if not song:

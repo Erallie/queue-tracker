@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 from .database import Store
 from .oauth import PROVIDERS, authorize_url, exchange, profile
-from .queue import QueueBridge, hourly_maintenance
+from .queue import QueueBridge, SongAlreadyQueuedError, hourly_maintenance
 
 
 class Service:
@@ -196,7 +196,9 @@ class Service:
         if not title: raise web.HTTPNotFound(text='{"error":"Song not found"}', content_type="application/json")
         name = self.request_name(user_id)
         try:
-            await self.queue.request(title, name)
+            await self.queue.request(title, name, self.store.group_request_titles(request.match_info["song_id"]))
+        except SongAlreadyQueuedError as error:
+            return web.json_response({"error": str(error)}, status=409)
         except RuntimeError as error:
             return web.json_response({"error": str(error)}, status=503)
         self.store.record_request(user_id, title, name)

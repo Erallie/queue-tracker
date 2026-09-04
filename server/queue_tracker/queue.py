@@ -11,6 +11,10 @@ import aiohttp
 from .database import Store
 
 
+class SongAlreadyQueuedError(RuntimeError):
+    pass
+
+
 class QueueBridge:
     def __init__(self, store: Store) -> None:
         self.store = store
@@ -173,13 +177,17 @@ class QueueBridge:
             return previous[0]
         return None
 
-    async def request(self, title: str, request_name: str) -> None:
+    async def request(self, title: str, request_name: str, grouped_titles: list[str] | None = None) -> None:
         if not self.auth_cookie:
             raise RuntimeError("Song requests are not configured on the server")
         payload = {"cmd": "choose", "selection": title, "added_for": request_name}
         async with self._send_lock:
             if not self.socket or self.socket.closed:
                 raise RuntimeError("The request queue is temporarily disconnected")
+            if grouped_titles:
+                queued = {self._queue_title_key(item["title"]) for item in self.current_queue}
+                if any(self._queue_title_key(grouped_title) in queued for grouped_title in grouped_titles):
+                    raise SongAlreadyQueuedError("Song is already in the queue!")
             reply = asyncio.get_running_loop().create_future()
             self._choose_reply = reply
             previous_count = sum(item["title"] == title for item in self.current_queue)
@@ -198,6 +206,10 @@ class QueueBridge:
             if result.get("error"):
                 raise RuntimeError(str(result["error"]))
             logging.info("MustardMine confirmed the queue request for %r", result.get("selection") or title)
+
+    @staticmethod
+    def _queue_title_key(title: str) -> str:
+        return " ".join(title.casefold().split())
 
 
 async def hourly_maintenance(store: Store) -> None:
