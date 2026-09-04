@@ -124,6 +124,15 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .picker-option > span { display: grid; min-width: 0; }
 .picker-option strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88rem; }
 .picker-option small { color: rgb(var(--muted)); }
+.tag-editor-row { align-items: end; }
+.fixed-ranking { display: grid; gap: .45rem; align-self: stretch; }
+.fixed-ranking span { color: rgb(var(--foreground)); font-size: .85rem; font-weight: 650; }
+.fixed-ranking strong { display: flex; align-items: center; min-height: 43px; padding: .65rem .8rem; border-left: 3px solid rgb(var(--accent)); color: rgb(var(--muted)); background: rgba(var(--foreground), .055); font-size: .8rem; font-weight: 600; }
+.tag-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.tag-actions input[type='color'] { width: 44px; height: 36px; padding: .2rem; cursor: pointer; }
+.tag-actions > button:not(.button) { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid rgba(var(--line), .4); color: rgb(var(--foreground)); background: rgba(var(--surface-strong), .9); cursor: pointer; }
+.tag-actions > button:not(.button):hover:not(:disabled) { border-color: rgb(var(--accent)); color: rgb(var(--accent)); }
+.tag-actions > button:disabled { opacity: .35; cursor: not-allowed; }
 .metric-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1rem; margin-bottom: 1.25rem; }
 .metric { padding: 1rem; border: 1px solid rgba(var(--line), .3); background: rgba(var(--surface), .84); backdrop-filter: blur(12px); }
 .metric strong { display: block; margin-top: .2rem; color: rgb(var(--foreground)); font-size: 1.8rem; font-weight: 400; }

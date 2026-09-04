@@ -63,7 +63,8 @@ class Store:
           group_id TEXT NOT NULL REFERENCES song_groups(id) ON DELETE CASCADE,
           raw_title TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(group_id, raw_title));
         CREATE TABLE IF NOT EXISTS tags(
-          name TEXT PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0, color TEXT NOT NULL DEFAULT '#ab212a');
+          name TEXT PRIMARY KEY, points INTEGER NOT NULL DEFAULT 0,
+          color TEXT NOT NULL DEFAULT '#ab212a', position INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS song_tags(
           raw_title TEXT NOT NULL REFERENCES songs(raw_title) ON DELETE CASCADE,
           tag_name TEXT NOT NULL REFERENCES tags(name) ON DELETE CASCADE,
@@ -76,9 +77,16 @@ class Store:
         CREATE INDEX IF NOT EXISTS idx_group_members_title ON group_members(raw_title);
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         """)
+        tag_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(tags)")}
+        if "position" not in tag_columns:
+            self.db.execute("ALTER TABLE tags ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+            existing_tags = self.db.execute("SELECT name FROM tags ORDER BY name='New' DESC, name").fetchall()
+            for position, tag in enumerate(existing_tags):
+                self.db.execute("UPDATE tags SET position=? WHERE name=?", (position, tag["name"]))
         for key, value in DEFAULT_SETTINGS.items():
             self.db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", (key, json.dumps(value)))
-        self.db.execute("INSERT OR IGNORE INTO tags VALUES('New',100,'#d33355')")
+        self.db.execute("INSERT OR IGNORE INTO tags(name,points,color,position) VALUES('New',0,'#d33355',0)")
+        self.db.execute("UPDATE tags SET points=0 WHERE name='New'")
         self.db.commit()
         if not self.db.execute("SELECT 1 FROM songs LIMIT 1").fetchone():
             self.sync_songs(str(self.settings()["song_text"]))
@@ -147,16 +155,19 @@ class Store:
         return result
 
     def tags(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.db.execute("SELECT name,points,color FROM tags ORDER BY name='New' DESC, name")]
+        return [dict(row) for row in self.db.execute("SELECT name,points,color FROM tags ORDER BY position, name")]
 
     def save_tags(self, tags: list[dict[str, Any]]) -> None:
         keep = {"New"}
-        for tag in tags:
+        for position, tag in enumerate(tags):
             name = str(tag.get("name") or "").strip()
             if not name:
                 continue
             keep.add(name)
-            self.db.execute("INSERT INTO tags VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET points=excluded.points,color=excluded.color", (name, int(tag.get("points") or 0), str(tag.get("color") or "#ab212a")))
+            points = 0 if name == "New" else int(tag.get("points") or 0)
+            self.db.execute("""INSERT INTO tags(name,points,color,position) VALUES(?,?,?,?)
+              ON CONFLICT(name) DO UPDATE SET points=excluded.points,color=excluded.color,position=excluded.position""",
+              (name, points, str(tag.get("color") or "#ab212a"), position))
         placeholders = ",".join("?" for _ in keep)
         self.db.execute(f"DELETE FROM tags WHERE name NOT IN ({placeholders})", tuple(keep))
         self.db.commit()
@@ -200,7 +211,8 @@ class Store:
         tags = {row[0] for row in self.db.execute(f"SELECT tag_name FROM song_tags WHERE raw_title IN ({placeholders})", tuple(raw_titles))}
         if is_new: tags.add("New")
         else: tags.discard("New")
-        return sorted(tags, key=lambda value: (value != "New", value.casefold()))
+        positions = {row["name"]: row["position"] for row in self.db.execute("SELECT name,position FROM tags")}
+        return sorted(tags, key=lambda value: (positions.get(value, 1_000_000), value.casefold()))
 
     def _song_json(self, song_id: str, title: str, parenthetical: str, tags: list[str], is_new: bool, play_count: int, last_played: str | None) -> dict[str, Any]:
         points = 0

@@ -106,6 +106,13 @@
     }).slice(0, 12);
   }
   function addTag() { catalog.tags = [...catalog.tags, { name: 'New tag', points: 0, color: '#ab212a' }]; }
+  function moveTag(tagIndex: number, direction: -1 | 1) {
+    const destination = tagIndex + direction;
+    if (destination < 0 || destination >= catalog.tags.length) return;
+    const tags = [...catalog.tags];
+    [tags[tagIndex], tags[destination]] = [tags[destination], tags[tagIndex]];
+    catalog.tags = tags;
+  }
   function toggleSongTag(songId: string, tag: string, checked: boolean) {
     const song = catalog.songs.find((item) => item.id === songId);
     if (!song) return;
@@ -207,10 +214,23 @@
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveGroups(groups), 'Song groups saved')}>Save groups</button></div>
     {:else if tab === 'tags'}
-      <div class="section-heading"><div><h2>Tags and ranking points</h2><p class="muted">Higher tag totals appear first. New songs always stay above every other song.</p></div><button class="button secondary small" onclick={addTag}>Add tag</button></div>
+      <div class="section-heading"><div><h2>Tags and ranking points</h2><p class="muted">Use the arrows to choose the order tags appear. Higher point totals rank songs first, while New songs always stay above every other song.</p></div><button class="button secondary small" onclick={addTag}>Add tag</button></div>
       <div class="stack">
         {#each catalog.tags as tag, index}
-          <div class="group-card"><label>Tag name<input bind:value={tag.name} disabled={tag.name === 'New'} /></label><label>Ranking points<input type="number" bind:value={tag.points} /></label><div class="actions"><input aria-label={`${tag.name} color`} type="color" bind:value={tag.color} style="width:46px;padding:.2rem" /><button class="button secondary small" disabled={tag.name === 'New'} onclick={() => catalog.tags = catalog.tags.filter((_, i) => i !== index)}>Remove</button></div></div>
+          <div class="group-card tag-editor-row">
+            <label>Tag name<input bind:value={tag.name} disabled={tag.name === 'New'} /></label>
+            {#if tag.name === 'New'}
+              <div class="fixed-ranking"><span>Ranking points</span><strong>Always displayed first</strong></div>
+            {:else}
+              <label>Ranking points<input type="number" bind:value={tag.points} /></label>
+            {/if}
+            <div class="tag-actions">
+              <input aria-label={`${tag.name} color`} title={`${tag.name} color`} type="color" bind:value={tag.color} />
+              <button type="button" aria-label={`Move ${tag.name} up`} title="Move up" disabled={index === 0} onclick={() => moveTag(index, -1)}>↑</button>
+              <button type="button" aria-label={`Move ${tag.name} down`} title="Move down" disabled={index === catalog.tags.length - 1} onclick={() => moveTag(index, 1)}>↓</button>
+              <button class="button secondary small" disabled={tag.name === 'New'} onclick={() => catalog.tags = catalog.tags.filter((_, i) => i !== index)}>Remove</button>
+            </div>
+          </div>
         {/each}
       </div>
       <h3 style="margin-top:2rem">Assign tags to songs</h3>
