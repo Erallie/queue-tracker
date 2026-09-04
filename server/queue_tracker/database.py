@@ -14,6 +14,14 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def alphabetical_key(value: str) -> str:
+    folded = value.casefold()
+    for article in ("a ", "an ", "the "):
+        if folded.startswith(article):
+            return folded[len(article):]
+    return folded
+
+
 SEED_SONGLIST = (Path(__file__).resolve().parent.parent / "seed_songlist.md").read_text(encoding="utf-8")
 
 DEFAULT_SETTINGS = {
@@ -200,7 +208,7 @@ class Store:
             else:
                 tags = self._tags_for([song["raw_title"]], bool(song["is_new"]))
                 output.append(self._song_json(song["id"], song["title"], song["parenthetical"], tags, bool(song["is_new"]), song["play_count"], song["last_played"]))
-        output.sort(key=lambda song: (not song["is_new"], -song["tag_points"], song["play_count"], song["parenthetical"].casefold(), song["title"].casefold()))
+        output.sort(key=lambda song: (not song["is_new"], -song["tag_points"], song["play_count"], alphabetical_key(song["parenthetical"]), alphabetical_key(song["title"])))
         return {"songs": output, "tags": self.tags()}
 
     def _tags_for(self, raw_titles: list[str], is_new: bool) -> list[str]:

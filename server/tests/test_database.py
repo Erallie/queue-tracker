@@ -6,6 +6,27 @@ from queue_tracker.database import Store
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_catalog_sort_ignores_leading_articles_without_changing_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Songs\nAlpha (Bananas)\nZebra (The Apples)\nThe Apple (Same)\nBanana (Same)\nA Cherry (Same)\nAn Date (Same)"})
+                songs = store.catalog()["songs"]
+                names = [(song["title"], song["parenthetical"]) for song in songs]
+                self.assertEqual(
+                    names,
+                    [
+                        ("Zebra", "The Apples"),
+                        ("Alpha", "Bananas"),
+                        ("The Apple", "Same"),
+                        ("Banana", "Same"),
+                        ("A Cherry", "Same"),
+                        ("An Date", "Same"),
+                    ],
+                )
+            finally:
+                store.close()
+
     def test_non_new_song_can_be_adjusted(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))
