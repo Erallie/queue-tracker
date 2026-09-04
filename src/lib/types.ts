@@ -35,6 +35,7 @@ export type QueueItem = {
 export type QueueState = {
   queue: QueueItem[];
   connected: boolean;
+  queue_open: boolean | null;
 };
 
 export type Settings = {

@@ -7,7 +7,7 @@
 
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let account = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let queueState = $state<QueueState>({ queue: [], connected: false });
+  let queueState = $state<QueueState>({ queue: [], connected: false, queue_open: null });
   let query = $state('');
   let selectedTags = $state<string[]>([]);
   let loading = $state(true);
@@ -85,7 +85,9 @@
       <div class="eyebrow">Live queue</div>
       <h2 id="current-queue-heading">Up next</h2>
     </div>
-    <span class:connected={queueState.connected} class="queue-status">{queueState.connected ? 'Live' : 'Reconnecting'}</span>
+    <span class:open={queueState.queue_open === true} class:closed={queueState.queue_open === false} class="queue-status">
+      {queueState.queue_open === null ? 'Checking queue' : queueState.queue_open ? 'Queue open' : 'Queue closed'}
+    </span>
   </div>
   <div class="queue-viewport">
     {#if queueState.queue.length === 0}

@@ -99,7 +99,8 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .queue-viewport { min-height: 3.5rem; }
 .queue-status { display: inline-flex; align-items: center; gap: .45rem; color: rgb(var(--muted)); font-size: .75rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
 .queue-status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--gold)); }
-.queue-status.connected::before { background: rgb(var(--green)); box-shadow: 0 0 0 4px rgba(var(--green), .14); }
+.queue-status.open::before { background: rgb(var(--green)); box-shadow: 0 0 0 4px rgba(var(--green), .14); }
+.queue-status.closed::before { background: rgb(var(--danger)); box-shadow: 0 0 0 4px rgba(var(--danger), .14); }
 .queue-empty { margin: 0; padding: 1rem; border-left: 3px solid rgba(var(--line), .35); color: rgb(var(--muted)); background: rgba(var(--foreground), .04); }
 .queue-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: .65rem; margin: 0; padding: 0; list-style: none; }
 .queue-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .8rem; min-width: 0; padding: .8rem; border: 1px solid rgba(var(--line), .24); background: rgba(var(--foreground), .045); }

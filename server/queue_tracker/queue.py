@@ -19,6 +19,7 @@ class QueueBridge:
         self.task: asyncio.Task[None] | None = None
         self.previous: list[str] = []
         self.current_queue: list[dict[str, str]] = []
+        self.queue_open: bool | None = None
         self.listeners: set[asyncio.Queue[list[dict[str, str]]]] = set()
         self.connected = False
         self._send_lock = asyncio.Lock()
@@ -65,6 +66,7 @@ class QueueBridge:
             finally:
                 self.connected = False
                 self.socket = None
+                self.queue_open = None
                 self._publish_queue()
                 if self._choose_reply and not self._choose_reply.done():
                     self._choose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the request"))
@@ -80,6 +82,8 @@ class QueueBridge:
             return
         if payload.get("cmd") != "update":
             return
+        if "queue_open" in payload:
+            self.queue_open = bool(payload["queue_open"])
         queue = payload.get("queue")
         if queue is None and isinstance(payload.get("data"), dict):
             queue = payload["data"].get("queue")

@@ -128,7 +128,7 @@ class Service:
         return web.json_response(self.store.catalog())
 
     async def current_queue(self, _request: web.Request) -> web.Response:
-        return web.json_response({"queue": self.queue.current_queue, "connected": self.queue.connected})
+        return web.json_response({"queue": self.queue.current_queue, "connected": self.queue.connected, "queue_open": self.queue.queue_open})
 
     async def queue_events(self, request: web.Request) -> web.StreamResponse:
         headers = {
@@ -147,7 +147,7 @@ class Service:
             while True:
                 try:
                     queue = await asyncio.wait_for(listener.get(), timeout=20)
-                    payload = {"queue": queue, "connected": self.queue.connected}
+                    payload = {"queue": queue, "connected": self.queue.connected, "queue_open": self.queue.queue_open}
                     await response.write(f"event: queue\ndata: {json.dumps(payload)}\n\n".encode())
                 except TimeoutError:
                     await response.write(b": keepalive\n\n")

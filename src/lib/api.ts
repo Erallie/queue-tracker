@@ -25,7 +25,7 @@ export async function getAccount(): Promise<Account> {
 }
 
 export async function getQueue(): Promise<QueueState> {
-  if (!api) return { queue: [], connected: false };
+  if (!api) return { queue: [], connected: false, queue_open: null };
   return request<QueueState>('/api/queue');
 }
 
