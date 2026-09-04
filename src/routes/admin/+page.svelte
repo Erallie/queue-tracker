@@ -33,6 +33,7 @@
     title: string;
     parenthetical: string;
     section: string;
+    isNew: boolean;
   };
 
   function parseGroupSongOptions(text: string): GroupSongOption[] {
@@ -50,13 +51,15 @@
         if (line.startsWith('# ')) section = line.slice(2).trim();
         continue;
       }
+      const isNew = /\s*\[New\]\s*$/i.test(line);
       const rawTitle = line.replace(/\s*\[New\]\s*$/i, '').trim();
       const match = rawTitle.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
       options.push({
         rawTitle,
         title: match?.[1]?.trim() || rawTitle,
         parenthetical: match?.[2]?.trim() || '',
-        section
+        section,
+        isNew
       });
     }
     return options;
@@ -102,8 +105,41 @@
     return output.join('\n').trim();
   }
 
+  function addNewSongsSection(outputText: string, sourceText: string): string {
+    const memberGroups = new Map<string, { key: string; displayName: string }>();
+    groups.forEach((group, index) => {
+      const displayName = group.display_name.replace(/\s*\[New\]\s*$/i, '').trim();
+      for (const member of group.members) {
+        memberGroups.set(member, { key: group.id || `group-${index}`, displayName });
+      }
+    });
+
+    const emittedGroups = new Set<string>();
+    const newSongs: string[] = [];
+    for (const song of parseGroupSongOptions(sourceText)) {
+      if (!song.isNew) continue;
+      const group = memberGroups.get(song.rawTitle);
+      if (group) {
+        if (emittedGroups.has(group.key)) continue;
+        emittedGroups.add(group.key);
+        newSongs.push(`${group.displayName || song.rawTitle} [New]`);
+      } else {
+        newSongs.push(`${song.rawTitle} [New]`);
+      }
+    }
+    if (!newSongs.length) return outputText;
+
+    const lines = outputText.replace(/\r\n?/g, '\n').split('\n');
+    const firstHeading = lines.findIndex((line) => line.trimStart().startsWith('#'));
+    const insertAt = firstHeading < 0 ? lines.length : firstHeading;
+    const section = ['# New Songs', ...newSongs, ''];
+    lines.splice(insertAt, 0, ...section);
+    return lines.join('\n');
+  }
+
   async function copyText(cleaned: boolean) {
-    await navigator.clipboard.writeText(cleaned ? cleanForCopy(settings.song_text) : settings.song_text);
+    const text = cleaned ? cleanForCopy(settings.song_text) : settings.song_text;
+    await navigator.clipboard.writeText(addNewSongsSection(text, settings.song_text));
     status = cleaned ? 'Cleaned song text copied' : 'Editable song text copied';
   }
 
