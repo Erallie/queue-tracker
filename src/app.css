@@ -90,6 +90,8 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .actions { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; }
 .actions:has(.button) { margin-top: 1rem; }
+.editor-destinations { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem 1rem; margin-top: .8rem; font-size: .85rem; }
+.editor-destinations a { color: rgb(var(--accent)); font-weight: 650; text-underline-offset: 3px; }
 .tracker-actions { flex-wrap: nowrap; }
 .tracker-actions.actions:has(.button) { margin-top: 0; }
 .remove-new { white-space: nowrap; }
