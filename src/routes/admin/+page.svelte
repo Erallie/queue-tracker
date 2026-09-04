@@ -13,6 +13,8 @@
   let status = $state('');
   let error = $state('');
   let groupSearches = $state<Record<number, string>>({});
+  let tagQuery = $state('');
+  let tagFilters = $state<string[]>([]);
   let trackerQuery = $state('');
   let trackerTags = $state<string[]>([]);
   let removingNew = $state('');
@@ -53,6 +55,14 @@
 
   const groupSongOptions = $derived(parseGroupSongOptions(settings.song_text));
   const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
+  const tagAssignmentSongs = $derived.by(() => {
+    const needle = tagQuery.trim().toLocaleLowerCase();
+    return catalog.songs.filter((song) => {
+      const textMatch = !needle || `${song.title} ${song.parenthetical}`.toLocaleLowerCase().includes(needle);
+      const tagMatch = tagFilters.every((tag) => song.tags.includes(tag));
+      return textMatch && tagMatch;
+    });
+  });
   const trackedSongs = $derived.by(() => {
     const needle = trackerQuery.trim().toLocaleLowerCase();
     return catalog.songs.filter((song) => {
@@ -132,6 +142,9 @@
   }
   function toggleTrackerTag(tag: string) {
     trackerTags = trackerTags.includes(tag) ? trackerTags.filter((item) => item !== tag) : [...trackerTags, tag];
+  }
+  function toggleTagFilter(tag: string) {
+    tagFilters = tagFilters.includes(tag) ? tagFilters.filter((item) => item !== tag) : [...tagFilters, tag];
   }
   async function manuallyRemoveNew(songId: string) {
     removingNew = songId; status = ''; error = '';
@@ -262,11 +275,27 @@
       </div>
       <h3 style="margin-top:2rem">Assign tags to songs</h3>
       <p class="muted">A grouped song applies the selected tags to the version used for requests.</p>
-      <div class="table-wrap"><table><thead><tr><th>Song</th><th>Tags</th></tr></thead><tbody>
-        {#each catalog.songs as song}
-          <tr><td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td><td><div class="tag-list">{#each catalog.tags.filter((item) => item.name !== 'New') as tag}<label class="tag-check"><input type="checkbox" checked={song.tags.includes(tag.name)} onchange={(event) => toggleSongTag(song.id, tag.name, event.currentTarget.checked)} /><span>{tag.name}</span></label>{/each}</div></td></tr>
-        {/each}
-      </tbody></table></div>
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input bind:value={tagQuery} type="search" placeholder="Search title, artist, or musical…" aria-label="Search songs to assign tags" />
+        </div>
+        <div class="tag-list" aria-label="Filter tag assignments by tags">
+          {#each catalog.tags as tag (tag.name)}
+            <button class:selected={tagFilters.includes(tag.name)} class="tag-filter" type="button" onclick={() => toggleTagFilter(tag.name)}>{tag.name}</button>
+          {/each}
+        </div>
+      </div>
+      {#if tagFilters.length > 1}<p class="muted">Showing songs that have all {tagFilters.length} selected tags.</p>{/if}
+      {#if tagAssignmentSongs.length === 0}
+        <div class="empty"><strong>No songs match those filters.</strong><br />Try a different search or remove a tag.</div>
+      {:else}
+        <div class="table-wrap"><table><thead><tr><th>Song</th><th>Tags</th></tr></thead><tbody>
+          {#each tagAssignmentSongs as song (song.id)}
+            <tr><td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td><td><div class="tag-list">{#each catalog.tags.filter((item) => item.name !== 'New') as tag}<label class="tag-check"><input type="checkbox" checked={song.tags.includes(tag.name)} onchange={(event) => toggleSongTag(song.id, tag.name, event.currentTarget.checked)} /><span>{tag.name}</span></label>{/each}</div></td></tr>
+          {/each}
+        </tbody></table></div>
+      {/if}
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveTags(catalog.tags); await Promise.all(catalog.songs.map((song) => saveSongTags(song.id, song.tags))); }, 'Tags and song assignments saved')}>Save tags</button></div>
     {:else if tab === 'tracker'}
       <div class="section-heading"><div><h2>All songs</h2><p class="muted">Every song in the current song list appears here, whether or not it is New. Queue removals update automatically; same-song groups share one combined count.</p></div></div>
