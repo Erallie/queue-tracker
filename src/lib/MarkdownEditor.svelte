@@ -106,7 +106,6 @@
             '.cm-line': { padding: '0 0 .12rem' },
             '.cm-gutters': { display: 'none' },
             '.cm-content': { padding: '1rem .9rem 3rem' },
-            '&.cm-focused .cm-cursor, .cm-dropCursor': { borderLeftColor: 'rgb(var(--foreground)) !important' },
             '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
               backgroundColor: 'rgba(var(--accent), .25)'
             },
@@ -116,7 +115,7 @@
             '.cm-live-heading-3': { fontSize: '1.15rem' },
             '.cm-live-heading-4, .cm-live-heading-5, .cm-live-heading-6': { fontSize: '1rem' },
             '.cm-live-emphasis': { fontStyle: 'italic' },
-            '.cm-live-link': { color: 'rgb(var(--green))', textDecoration: 'underline', textUnderlineOffset: '2px' }
+            '.cm-live-link': { color: 'rgb(var(--accent))', textDecoration: 'underline', textUnderlineOffset: '2px' }
           })
         ]
       })
@@ -139,5 +138,19 @@
   .markdown-editor {
     width: 100%;
     min-width: 0;
+  }
+
+  .markdown-editor :global(.cm-content) {
+    caret-color: transparent !important;
+  }
+
+  :global(.app-shell.light) .markdown-editor :global(.cm-cursor),
+  :global(.app-shell.light) .markdown-editor :global(.cm-dropCursor) {
+    border-left-color: #000 !important;
+  }
+
+  :global(.app-shell.dark) .markdown-editor :global(.cm-cursor),
+  :global(.app-shell.dark) .markdown-editor :global(.cm-dropCursor) {
+    border-left-color: #fff !important;
   }
 </style>
