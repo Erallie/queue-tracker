@@ -7,7 +7,7 @@
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, queue_websocket_url: '', queue_group: '' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, default_artist: 'Erallie', queue_websocket_url: '', queue_group: '' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let loading = $state(true);
@@ -341,6 +341,7 @@
         <label>Minimum days a song stays New<input type="number" min="0" bind:value={settings.new_min_days} /></label>
         <label>Days to retain recently graduated data<input type="number" min="0" bind:value={settings.recently_graduated_days} /></label>
         <label>Last-played dates retained per song<input type="number" min="1" bind:value={settings.last_played_history_limit} /></label>
+        <label>Default artist for songs without parentheses<input required bind:value={settings.default_artist} /></label>
         <label>Queue group<input bind:value={settings.queue_group} /></label>
         <label class="full">Queue WebSocket URL<input type="url" bind:value={settings.queue_websocket_url} /></label>
       </div>

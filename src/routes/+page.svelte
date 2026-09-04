@@ -133,7 +133,7 @@
           {#each filtered as song (song.id)}
             <tr>
               <td><div class="song-title">{song.title}</div></td>
-              <td class="song-parenthetical">{song.parenthetical || 'Original'}</td>
+              <td class="song-parenthetical">{song.parenthetical}</td>
               <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
               <td>{relativeTime(song.last_played, clock)}</td>
               <td class="number">{song.play_count}</td>

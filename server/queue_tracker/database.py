@@ -30,6 +30,7 @@ DEFAULT_SETTINGS = {
     "new_min_days": 14,
     "recently_graduated_days": 7,
     "last_played_history_limit": 10,
+    "default_artist": "Erallie",
     "queue_websocket_url": "wss://sikorsky.mustardmine.com/ws",
     "queue_group": "#275206561",
 }
@@ -132,7 +133,12 @@ class Store:
         allowed = DEFAULT_SETTINGS.keys()
         for key in allowed:
             if key in values:
-                value = max(1, int(values[key])) if key == "last_played_history_limit" else values[key]
+                if key == "last_played_history_limit":
+                    value = max(1, int(values[key]))
+                elif key == "default_artist":
+                    value = str(values[key]).strip() or DEFAULT_SETTINGS["default_artist"]
+                else:
+                    value = values[key]
                 self.db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(value)))
         if "song_text" in values:
             self.sync_songs(str(values["song_text"]))
@@ -201,6 +207,7 @@ class Store:
         self.db.commit()
 
     def catalog(self) -> dict[str, Any]:
+        default_artist = str(self.settings()["default_artist"])
         member_to_group: dict[str, sqlite3.Row] = {}
         groups: dict[str, dict[str, Any]] = {}
         for group in self.db.execute("SELECT * FROM song_groups ORDER BY position"):
@@ -220,6 +227,7 @@ class Store:
                 rows = [self.db.execute("SELECT * FROM songs WHERE raw_title=?", (member,)).fetchone() for member in info["members"]]
                 rows = [row for row in rows if row]
                 title, parenthetical = split_name(group["display_name"])
+                parenthetical = parenthetical or default_artist
                 play_count = sum(row["play_count"] for row in rows)
                 last_played = max((row["last_played"] for row in rows if row["last_played"]), default=None)
                 is_new = any(row["is_new"] for row in rows)
@@ -227,8 +235,9 @@ class Store:
                 tags = self._tags_for([row["raw_title"] for row in rows], is_new)
                 output.append(self._song_json(song_id, title, parenthetical, tags, is_new, play_count, last_played))
             else:
+                parenthetical = song["parenthetical"] or default_artist
                 tags = self._tags_for([song["raw_title"]], bool(song["is_new"]))
-                output.append(self._song_json(song["id"], song["title"], song["parenthetical"], tags, bool(song["is_new"]), song["play_count"], song["last_played"]))
+                output.append(self._song_json(song["id"], song["title"], parenthetical, tags, bool(song["is_new"]), song["play_count"], song["last_played"]))
         output.sort(key=lambda song: (
             not song["is_new"],
             -song["tag_points"],

@@ -31,6 +31,7 @@ export const demoSettings: Settings = {
   new_min_days: 14,
   recently_graduated_days: 7,
   last_played_history_limit: 10,
+  default_artist: 'Erallie',
   queue_websocket_url: 'wss://sikorsky.mustardmine.com/ws',
   queue_group: '#275206561'
 };

@@ -44,6 +44,7 @@ export type Settings = {
   new_min_days: number;
   recently_graduated_days: number;
   last_played_history_limit: number;
+  default_artist: string;
   queue_websocket_url: string;
   queue_group: string;
 };

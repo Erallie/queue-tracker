@@ -7,6 +7,17 @@ from queue_tracker.database import Store
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_catalog_uses_configured_artist_when_parenthetical_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Originals\nMy Original", "default_artist": "Erallie"})
+                song = store.catalog()["songs"][0]
+                self.assertEqual(song["title"], "My Original")
+                self.assertEqual(song["parenthetical"], "Erallie")
+            finally:
+                store.close()
+
     def test_catalog_sort_prefers_never_played_then_oldest_played(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))
