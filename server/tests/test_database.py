@@ -7,6 +7,20 @@ from queue_tracker.database import Store
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_catalog_change_callback_runs_after_play_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                notifications = []
+                store.on_catalog_changed = lambda: notifications.append(store.catalog())
+                song = next(item for item in store.catalog()["songs"] if item["title"] == "Pandemonium")
+                store.adjust_play(song["id"], 1)
+                self.assertEqual(len(notifications), 1)
+                updated = next(item for item in notifications[0]["songs"] if item["id"] == song["id"])
+                self.assertEqual(updated["play_count"], 1)
+            finally:
+                store.close()
+
     def test_catalog_uses_configured_artist_when_parenthetical_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))

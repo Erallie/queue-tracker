@@ -35,12 +35,15 @@ class Service:
         self.http: aiohttp.ClientSession | None = None
         self.cookie_name = "queue_tracker_session"
         self.owner_identities = {item.strip() for item in os.getenv("OWNER_IDENTITIES", "").split(",") if item.strip()}
-        self.queue_event_tasks: set[asyncio.Task[Any]] = set()
+        self.event_tasks: set[asyncio.Task[Any]] = set()
+        self.catalog_listeners: set[asyncio.Queue[dict[str, Any]]] = set()
+        self.store.on_catalog_changed = self.publish_catalog
 
     def app(self) -> web.Application:
         app = web.Application(middlewares=[self.cors])
         app.router.add_get("/api/health", self.health)
         app.router.add_get("/api/catalog", self.catalog)
+        app.router.add_get("/api/catalog/events", self.catalog_events)
         app.router.add_get("/api/queue", self.current_queue)
         app.router.add_get("/api/queue/events", self.queue_events)
         app.router.add_get("/api/me", self.me)
@@ -91,7 +94,7 @@ class Service:
         self.store.close()
 
     async def shutdown(self, _app: web.Application) -> None:
-        tasks = list(self.queue_event_tasks)
+        tasks = list(self.event_tasks)
         for task in tasks:
             task.cancel()
         if tasks:
@@ -137,6 +140,46 @@ class Service:
     async def catalog(self, _request: web.Request) -> web.Response:
         return web.json_response(self.store.catalog())
 
+    def publish_catalog(self) -> None:
+        snapshot = self.store.catalog()
+        for listener in self.catalog_listeners:
+            if listener.full():
+                listener.get_nowait()
+            listener.put_nowait(snapshot)
+
+    async def catalog_events(self, request: web.Request) -> web.StreamResponse:
+        headers = {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        }
+        origin = request.headers.get("Origin", "").rstrip("/")
+        if origin in self.origins:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Vary"] = "Origin"
+        response = web.StreamResponse(headers=headers)
+        await response.prepare(request)
+        listener: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=1)
+        listener.put_nowait(self.store.catalog())
+        self.catalog_listeners.add(listener)
+        task = asyncio.current_task()
+        if task:
+            self.event_tasks.add(task)
+        try:
+            while True:
+                try:
+                    catalog = await asyncio.wait_for(listener.get(), timeout=20)
+                    await response.write(f"event: catalog\ndata: {json.dumps(catalog)}\n\n".encode())
+                except TimeoutError:
+                    await response.write(b": keepalive\n\n")
+        except (ConnectionError, asyncio.CancelledError):
+            pass
+        finally:
+            self.catalog_listeners.discard(listener)
+            if task:
+                self.event_tasks.discard(task)
+        return response
+
     async def current_queue(self, _request: web.Request) -> web.Response:
         return web.json_response({"queue": self.queue.current_queue, "connected": self.queue.connected, "queue_open": self.queue.queue_open})
 
@@ -155,7 +198,7 @@ class Service:
         listener = self.queue.subscribe()
         task = asyncio.current_task()
         if task:
-            self.queue_event_tasks.add(task)
+            self.event_tasks.add(task)
         try:
             while True:
                 try:
@@ -169,7 +212,7 @@ class Service:
         finally:
             self.queue.unsubscribe(listener)
             if task:
-                self.queue_event_tasks.discard(task)
+                self.event_tasks.discard(task)
         return response
 
     async def me(self, request: web.Request) -> web.Response:

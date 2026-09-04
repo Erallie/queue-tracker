@@ -5,7 +5,7 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .catalog import parse_song_text, remove_new_marker, split_name
 
@@ -42,6 +42,7 @@ class Store:
         target.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(target)
         self.db.row_factory = sqlite3.Row
+        self.on_catalog_changed: Callable[[], None] | None = None
         self.db.execute("PRAGMA foreign_keys=ON")
         self.migrate()
 
@@ -125,6 +126,10 @@ class Store:
     def close(self) -> None:
         self.db.close()
 
+    def _catalog_changed(self) -> None:
+        if self.on_catalog_changed:
+            self.on_catalog_changed()
+
     def settings(self) -> dict[str, Any]:
         values = {row["key"]: json.loads(row["value"]) for row in self.db.execute("SELECT * FROM settings")}
         return {**DEFAULT_SETTINGS, **values}
@@ -145,6 +150,7 @@ class Store:
         if "last_played_history_limit" in values:
             self._trim_all_play_history()
         self.db.commit()
+        self._catalog_changed()
 
     def sync_songs(self, text: str) -> None:
         parsed = parse_song_text(text)
@@ -180,6 +186,7 @@ class Store:
             self.db.executemany("INSERT INTO group_members VALUES(?,?,?)", ((group_id, member, index) for index, member in enumerate(members)))
         self._trim_all_play_history()
         self.db.commit()
+        self._catalog_changed()
 
     def groups(self) -> list[dict[str, Any]]:
         result = []
@@ -205,6 +212,7 @@ class Store:
         placeholders = ",".join("?" for _ in keep)
         self.db.execute(f"DELETE FROM tags WHERE name NOT IN ({placeholders})", tuple(keep))
         self.db.commit()
+        self._catalog_changed()
 
     def catalog(self) -> dict[str, Any]:
         default_artist = str(self.settings()["default_artist"])
@@ -309,6 +317,7 @@ class Store:
         self._trim_play_history(history_titles)
         self._refresh_last_played(history_titles)
         self.db.commit()
+        self._catalog_changed()
 
     def _refresh_last_played(self, raw_titles: list[str]) -> None:
         if not raw_titles:
@@ -428,6 +437,7 @@ class Store:
             if tag != "New":
                 self.db.execute("INSERT OR IGNORE INTO song_tags VALUES(?,?)", (raw_title, tag))
         self.db.commit()
+        self._catalog_changed()
 
     def hourly_maintenance(self) -> list[str]:
         settings = self.settings()

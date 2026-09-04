@@ -20,6 +20,15 @@ export async function getCatalog(): Promise<Catalog> {
   try { return await request<Catalog>('/api/catalog'); } catch { return demoCatalog; }
 }
 
+export function watchCatalog(update: (catalog: Catalog) => void): () => void {
+  if (!api || typeof EventSource === 'undefined') return () => {};
+  const events = new EventSource(`${api}/api/catalog/events`);
+  events.addEventListener('catalog', (event) => {
+    try { update(JSON.parse((event as MessageEvent).data) as Catalog); } catch { /* A reconnect delivers another snapshot. */ }
+  });
+  return () => events.close();
+}
+
 export async function getAccount(): Promise<Account> {
   try { return await request<Account>('/api/me'); } catch { return demoAccount; }
 }

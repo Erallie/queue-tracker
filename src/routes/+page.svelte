@@ -1,7 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
-  import { getAccount, getCatalog, getQueue, requestSong, watchQueue } from '$lib/api';
+  import { getAccount, getCatalog, getQueue, requestSong, watchCatalog, watchQueue } from '$lib/api';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
   import type { Account, Catalog, QueueState, Song } from '$lib/types';
@@ -45,14 +45,19 @@
   onMount(() => {
     let alive = true;
     let receivedLiveQueue = false;
+    let receivedLiveCatalog = false;
     const clockTimer = window.setInterval(() => { clock = Date.now(); }, 60_000);
+    const stopWatchingCatalog = watchCatalog((next) => {
+      receivedLiveCatalog = true;
+      catalog = next;
+    });
     const stopWatching = watchQueue((next) => {
       receivedLiveQueue = true;
       queueState = next;
     });
     void Promise.all([getCatalog(), getAccount()]).then(([nextCatalog, nextAccount]) => {
       if (!alive) return;
-      catalog = nextCatalog;
+      if (!receivedLiveCatalog) catalog = nextCatalog;
       account = nextAccount;
       loading = false;
     });
@@ -62,6 +67,7 @@
     return () => {
       alive = false;
       window.clearInterval(clockTimer);
+      stopWatchingCatalog();
       stopWatching();
     };
   });
