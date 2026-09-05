@@ -129,15 +129,17 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .login-panel { display: flex; align-items: center; justify-content: flex-start; gap: 32px; }
 .login-panel .login-copy { flex: 0 1 550px; margin: 0; }
 .login-provider-grid { flex: 0 1 400px; width: min(100%, 400px); margin-inline: auto; grid-template-columns: minmax(0, 400px); justify-content: center; gap: .7rem; }
-.login-provider-button.button { width: 100%; min-height: 40px; padding: 9px 12px; gap: 10px; border-radius: 999px; background: #fff; font-family: 'Google Sans', Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: normal; text-transform: none; }
+.login-provider-button.button, .provider-action-button.button { width: 100%; min-height: 40px; padding: 9px 12px; gap: 10px; border: 1px solid #747775; border-radius: 999px; color: #1f1f1f; background: #fff; font-family: 'Google Sans', Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: normal; text-transform: none; box-shadow: none; }
 .login-provider-button.button .provider-mark { flex-basis: 20px; width: 20px; height: 20px; }
-.login-provider-button.button:hover { background: #f8faff; filter: none; }
-.app-shell.dark .login-provider-button.button { background: #131314; }
-.app-shell.dark .login-provider-button.button:hover { background: #1f1f20; }
+.login-provider-button.button:hover, .provider-action-button.button:hover { background: #f8faff; filter: none; }
+.login-provider-button.button:focus-visible, .provider-action-button.button:focus-visible { outline: 2px solid #0b57d0; outline-offset: 2px; }
+.app-shell.dark .login-provider-button.button, .app-shell.dark .provider-action-button.button { border-color: #8e918f; color: #e3e3e3; background: #131314; }
+.app-shell.dark .login-provider-button.button:hover, .app-shell.dark .provider-action-button.button:hover { background: #1f1f20; }
 .account-card { display: grid; height: 100%; gap: 1rem; box-shadow: none; }
 .account-grid > .account-card { margin-top: 0; }
 .provider { display: flex; align-items: center; gap: .85rem; }
 .provider-mark { display: block; flex: 0 0 42px; width: 42px; height: 42px; object-fit: contain; }
+.provider-mark.account-avatar { border-radius: 50%; object-fit: cover; }
 .google-sign-in.button { gap: 10px; min-height: 40px; padding: 9px 12px; border: 1px solid #747775; border-radius: 999px; color: #1f1f1f; background: #fff; font-family: 'Google Sans', Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: normal; text-transform: none; box-shadow: none; }
 .google-sign-in.button .provider-mark { flex-basis: 20px; width: 20px; height: 20px; margin: 0; }
 .google-sign-in.button:hover { background: #f8faff; filter: none; }

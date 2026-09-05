@@ -18,6 +18,11 @@
 
   function identity(provider: string) { return me.identities.find((item) => item.provider === provider); }
   function connect(provider: string, mode: string) { location.href = authUrl(provider, mode); }
+  function useProviderIcon(event: Event, icon: string) {
+    const image = event.currentTarget as HTMLImageElement;
+    image.onerror = null;
+    image.src = icon;
+  }
 
   async function disconnect(provider: string, name: string) {
     const last = me.identities.length === 1;
@@ -73,8 +78,27 @@
       {#each providers as provider}
         {@const linked = identity(provider.id)}
         <article class="panel account-card">
-          <div class="provider"><img class="provider-mark" src={provider.icon} alt="" /><div><h3>{provider.name}</h3><span class="muted">{linked?.display_name || 'Not linked'}</span></div>{#if linked}<span class="status-dot" title="Linked"></span>{/if}</div>
-          {#if linked}<button class="button secondary small" onclick={() => disconnect(provider.id, provider.name)}>Disconnect</button>{:else}<button class="button small" onclick={() => connect(provider.id, 'link')}>Link {provider.name}</button>{/if}
+          <div class="provider">
+            <img
+              class:account-avatar={Boolean(linked?.avatar_url)}
+              class="provider-mark"
+              src={linked?.avatar_url || provider.icon}
+              alt={linked ? `${linked.display_name}'s ${provider.name} profile` : ''}
+              onerror={(event) => useProviderIcon(event, provider.icon)}
+            />
+            <div><h3>{provider.name}</h3><span class="muted">{linked?.display_name || 'Not linked'}</span></div>
+            {#if linked}<span class="status-dot" title="Linked"></span>{/if}
+          </div>
+          {#if linked}
+            <button class="button secondary provider-action-button" onclick={() => disconnect(provider.id, provider.name)}>Disconnect</button>
+          {:else}
+            <button
+              class:google-sign-in={provider.id === 'google'}
+              class="button secondary provider login-provider-button provider-action-button"
+              type="button"
+              onclick={() => connect(provider.id, 'link')}
+            ><img class="provider-mark" src={provider.icon} alt="" /><span>Continue with {provider.name}</span></button>
+          {/if}
         </article>
       {/each}
     </div>
