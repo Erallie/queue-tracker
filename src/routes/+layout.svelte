@@ -67,8 +67,22 @@
 
   <main>{@render children()}</main>
 
-  <footer>
-    <img src={logo} alt="Gozar Productions" />
-    <div><strong>Gozar Productions</strong><span>Song requests for Erallie</span></div>
+  <footer class="site-footer">
+    <div class="footer-content">
+      <div class="footer-brand">
+        <img src={logo} alt="" />
+        <div class="footer-brand-copy"><strong>Gozar Productions</strong><span>Song requests for Erallie</span></div>
+      </div>
+      <div class="footer-meta">
+        <div class="footer-links">
+          <a href={`${base}/privacy`}>Privacy Policy</a>
+          <svg class="footer-separator" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="10" fill="currentColor" />
+          </svg>
+          <a href={`${base}/terms`}>Terms of Service</a>
+        </div>
+        <span>© 2026 Gozar Productions LLC. All Rights Reserved.</span>
+      </div>
+    </div>
   </footer>
 </div>

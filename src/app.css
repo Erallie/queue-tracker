@@ -37,11 +37,18 @@ nav a:hover, nav a.active { border-top-color: rgb(var(--accent)); background: rg
 .external-nav-arrow { display: block; flex: 0 0 auto; width: 1.05em; height: 1.05em; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: square; stroke-linejoin: miter; }
 
 main { flex: 1; width: min(1240px, calc(100% - 2rem)); margin: 0 auto; padding: 3rem 0 5rem; }
-footer { display: flex; justify-content: center; align-items: center; gap: .8rem; padding: 1.4rem; background: rgba(0, 0, 0, .9); color: white; }
-footer img { width: 48px; height: 48px; }
-footer div { display: grid; gap: .15rem; }
-footer strong { text-transform: uppercase; letter-spacing: .15em; font-weight: 400; }
-footer span { font-size: .78rem; opacity: .76; }
+.site-footer { padding: 1.4rem max(1rem, calc((100vw - 1240px) / 2)); background: rgba(0, 0, 0, .9); color: white; }
+.footer-content { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1.5rem; }
+.footer-brand { display: flex; align-items: center; gap: .8rem; }
+.footer-brand img { width: 48px; height: 48px; }
+.footer-brand-copy, .footer-meta { display: grid; gap: .15rem; }
+.footer-brand strong { text-transform: uppercase; letter-spacing: .15em; font-weight: 400; }
+.site-footer span { font-size: .78rem; opacity: .76; }
+.footer-meta { justify-items: end; gap: .45rem; text-align: right; }
+.footer-links { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .45rem .2rem; }
+.footer-links a { font-size: .78rem; text-decoration: none; text-underline-offset: 3px; }
+.footer-links a:hover, .footer-links a:focus-visible { text-decoration: underline; }
+.footer-separator { display: block; flex: 0 0 auto; width: 1em; height: 1em; }
 
 .eyebrow { color: rgb(var(--accent)); font-size: .76rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
 h1, h2, h3 { margin: 0; color: rgb(var(--foreground)); font-family: 'Montserrat', Arial, sans-serif; font-weight: 400; }
@@ -186,6 +193,18 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .metric { padding: 1rem; border: 1px solid rgba(var(--line), .3); background: rgba(var(--surface), .84); backdrop-filter: blur(12px); }
 .metric strong { display: block; margin-top: .2rem; color: rgb(var(--foreground)); font-size: 1.8rem; font-weight: 400; }
 code { color: rgb(var(--accent)); }
+.legal-document { max-width: 920px; margin-inline: auto; }
+.legal-document h2 { margin-top: 2rem; font-size: clamp(1.25rem, 2.3vw, 1.65rem); }
+.legal-document h3 { margin-top: 1.4rem; font-weight: 650; }
+.legal-document p, .legal-document li { line-height: 1.7; }
+.legal-document ul { padding-left: 1.3rem; }
+.legal-document li + li { margin-top: .45rem; }
+.legal-updated { margin-top: 0; color: rgb(var(--muted)); }
+.legal-document h2[id], .legal-document h3[id], .page-intro h1[id] { scroll-margin-top: 130px; }
+.legal-heading-link { color: inherit; text-decoration: none; text-underline-offset: .14em; }
+.legal-heading-link:hover, .legal-heading-link:focus-visible { text-decoration: underline; }
+.legal-document a:not(.legal-heading-link) { color: rgb(var(--accent)); text-decoration: none; text-underline-offset: 3px; }
+.legal-document a:not(.legal-heading-link):hover, .legal-document a:not(.legal-heading-link):focus-visible { text-decoration: underline; }
 
 @media (max-width: 900px) {
   .site-header { grid-template-columns: auto 1fr; }
@@ -277,6 +296,10 @@ code { color: rgb(var(--accent)); }
   .song-table .song-tags-cell .tag { min-height: 19px; padding: .08rem .36rem; font-size: .58rem; line-height: 1.2; }
   .song-table .request-cell { grid-area: request; align-self: center; white-space: nowrap; }
   .song-table .request-cell .button { min-height: 36px; padding: .48rem .62rem; font-size: .66rem; }
+  .footer-content, .footer-brand { align-items: flex-start; }
+  .footer-content { flex-direction: column; }
+  .footer-meta { justify-items: start; text-align: left; }
+  .footer-links { justify-content: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
