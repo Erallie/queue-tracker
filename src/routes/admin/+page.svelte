@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
+  import { tagVisualStyle } from '$lib/color';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
   import MarkdownEditor from '$lib/MarkdownEditor.svelte';
@@ -339,7 +340,7 @@
         </div>
         <div class="tag-list" aria-label="Filter tag assignments by tags">
           {#each catalog.tags as tag (tag.name)}
-            <button class:selected={tagFilters.includes(tag.name)} class="tag-filter" type="button" onclick={() => toggleTagFilter(tag.name)}>{tag.name}</button>
+            <button class:selected={tagFilters.includes(tag.name)} class="tag-filter" style={tagVisualStyle(tag.color)} type="button" onclick={() => toggleTagFilter(tag.name)}>{tag.name}</button>
           {/each}
         </div>
       </div>
@@ -349,7 +350,7 @@
       {:else}
         <div class="table-wrap"><table><thead><tr><th>Song</th><th>Tags</th></tr></thead><tbody>
           {#each tagAssignmentSongs as song (song.id)}
-            <tr><td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td><td><div class="tag-list">{#each catalog.tags.filter((item) => item.name !== 'New') as tag}<label class="tag-check"><input type="checkbox" checked={song.tags.includes(tag.name)} onchange={(event) => toggleSongTag(song.id, tag.name, event.currentTarget.checked)} /><span>{tag.name}</span></label>{/each}</div></td></tr>
+            <tr><td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td><td><div class="tag-list">{#each catalog.tags.filter((item) => item.name !== 'New') as tag}<label class="tag-check" style={tagVisualStyle(tag.color)}><input type="checkbox" checked={song.tags.includes(tag.name)} onchange={(event) => toggleSongTag(song.id, tag.name, event.currentTarget.checked)} /><span>{tag.name}</span></label>{/each}</div></td></tr>
           {/each}
         </tbody></table></div>
       {/if}
@@ -363,7 +364,7 @@
         </div>
         <div class="tag-list" aria-label="Filter tracked songs by tags">
           {#each catalog.tags as tag (tag.name)}
-            <button class:selected={trackerTags.includes(tag.name)} class="tag-filter" type="button" onclick={() => toggleTrackerTag(tag.name)}>{tag.name}</button>
+            <button class:selected={trackerTags.includes(tag.name)} class="tag-filter" style={tagVisualStyle(tag.color)} type="button" onclick={() => toggleTrackerTag(tag.name)}>{tag.name}</button>
           {/each}
         </div>
       </div>
@@ -375,7 +376,7 @@
           {#each trackedSongs as song (song.id)}
             <tr>
               <td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td>
-              <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
+              <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={tagVisualStyle(tagColors[tag] || '#ab212a')}>{tag}</span>{/each}</div></td>
               <td>{relativeTime(song.last_played, clock)}</td>
               <td class="number">{song.play_count}</td>
               <td><div class="actions tracker-actions"><button class="button secondary small" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, -1); Object.assign(song, result.song); }}>−</button><button class="button small" aria-label={`Increase plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, 1); Object.assign(song, result.song); }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>

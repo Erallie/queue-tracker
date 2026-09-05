@@ -2,6 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { getAccount, getCatalog, getQueue, requestSong, watchCatalog, watchQueue } from '$lib/api';
+  import { tagVisualStyle } from '$lib/color';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
   import type { Account, Catalog, QueueState, Song } from '$lib/types';
@@ -136,7 +137,7 @@
     </div>
     <div class="tag-list" aria-label="Filter by tags">
       {#each catalog.tags as tag (tag.name)}
-        <button class:selected={selectedTags.includes(tag.name)} class="tag-filter" type="button" onclick={() => toggleTag(tag.name)}>{tag.name}</button>
+        <button class:selected={selectedTags.includes(tag.name)} class="tag-filter" style={tagVisualStyle(tag.color)} type="button" onclick={() => toggleTag(tag.name)}>{tag.name}</button>
       {/each}
     </div>
   </div>
@@ -161,7 +162,7 @@
                 <div class="mobile-song-parenthetical">{song.parenthetical}</div>
               </td>
               <td class="song-parenthetical desktop-song-parenthetical">{song.parenthetical}</td>
-              <td class="song-tags-cell"><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
+              <td class="song-tags-cell"><div class="tag-list">{#each song.tags as tag}<span class="tag" style={tagVisualStyle(tagColors[tag] || '#ab212a')}>{tag}</span>{/each}</div></td>
               <td class="song-last-played">{relativeTime(song.last_played, clock)}</td>
               <td class="number song-play-count">{song.play_count}</td>
               <td class="request-cell"><button class="button small" disabled={requesting === song.id} onclick={() => queue(song)}>{requesting === song.id ? 'Sending…' : account.authenticated ? 'Request' : 'Sign in'}</button></td>
