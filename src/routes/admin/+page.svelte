@@ -111,11 +111,12 @@
   }
 
   function addNewSongsSection(outputText: string, sourceText: string): string {
-    const memberGroups = new Map<string, { key: string; displayName: string }>();
+    const memberGroups = new Map<string, { key: string; requestTitle: string }>();
     groups.forEach((group, index) => {
-      const displayName = group.display_name.replace(/\s*\[New\]\s*$/i, '').trim();
+      const requestTitle = group.members[0]?.replace(/\s*\[New\]\s*$/i, '').trim();
+      if (!requestTitle) return;
       for (const member of group.members) {
-        memberGroups.set(member, { key: group.id || `group-${index}`, displayName });
+        memberGroups.set(member, { key: group.id || `group-${index}`, requestTitle });
       }
     });
 
@@ -127,7 +128,7 @@
       if (group) {
         if (emittedGroups.has(group.key)) continue;
         emittedGroups.add(group.key);
-        newSongs.push(`${group.displayName || song.rawTitle} [New]`);
+        newSongs.push(`${group.requestTitle} [New]`);
       } else {
         newSongs.push(`${song.rawTitle} [New]`);
       }
@@ -330,7 +331,7 @@
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveTags(catalog.tags), 'Tag groups saved')}>Save tag groups</button></div>
       <h3 style="margin-top:2rem">Assign tags to songs</h3>
-      <p class="muted">Grouped-song tags are stored on the group itself and do not overwrite the tags on its member songs.</p>
+      <p class="muted">For a grouped song, the selected tags are applied to every member song.</p>
       <div class="toolbar">
         <div class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>

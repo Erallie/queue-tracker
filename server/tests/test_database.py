@@ -270,7 +270,7 @@ class DatabaseTests(unittest.TestCase):
                 self.assertEqual(member_dates, {"2026-09-01T12:00:00+00:00"})
 
                 store.save_song_tags_for_id(group["id"], ["First tag"])
-                member_assignments = {
+                grouped_assignments = {
                     row["raw_title"]: {tag["tag_name"] for tag in store.db.execute(
                         "SELECT tag_name FROM song_tags WHERE raw_title=?", (row["raw_title"],)
                     )}
@@ -278,65 +278,47 @@ class DatabaseTests(unittest.TestCase):
                         "SELECT raw_title FROM songs WHERE raw_title IN ('First (Show)','Second (Show)')"
                     )
                 }
-                self.assertEqual(member_assignments, {
+                self.assertEqual(grouped_assignments, {
                     "First (Show)": {"First tag"},
-                    "Second (Show)": {"Second tag"},
+                    "Second (Show)": {"First tag"},
                 })
-                group_assignments = {
-                    row["tag_name"]
-                    for row in store.db.execute(
-                        "SELECT tag_name FROM group_tags WHERE group_id=?", (group["id"][6:],)
-                    )
-                }
-                self.assertEqual(group_assignments, {"First tag"})
             finally:
                 store.close()
 
-    def test_song_removed_from_group_has_plays_and_history_reset(self):
+    def test_removing_and_readding_member_does_not_duplicate_plays(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))
             try:
                 store.save_settings({
                     "song_text": "# Songs\nFirst (Show)\nSecond (Show)\nThird (Show)"
                 })
+                songs = {item["title"]: item for item in store.catalog()["songs"]}
+                store.adjust_play(songs["First"]["id"], 1)
+                store.adjust_play(songs["Second"]["id"], 1)
                 store.save_groups([{
                     "id": "combined",
                     "display_name": "Combined (Show)",
                     "members": ["First (Show)", "Second (Show)", "Third (Show)"],
                 }])
-                with patch("queue_tracker.database.now", return_value="2026-09-01T12:00:00+00:00"):
-                    store.record_play("Third (Show)")
-                self.assertEqual(
-                    store.db.execute(
-                        "SELECT play_count FROM songs WHERE raw_title='Third (Show)'"
-                    ).fetchone()[0],
-                    1,
-                )
+                self.assertEqual(store.catalog()["songs"][0]["play_count"], 2)
 
                 store.save_groups([{
                     "id": "combined",
                     "display_name": "Combined (Show)",
-                    "members": ["First (Show)", "Second (Show)"],
+                    "members": ["First (Show)", "Third (Show)"],
                 }])
-
-                removed = store.db.execute(
-                    "SELECT play_count,last_played FROM songs WHERE raw_title='Third (Show)'"
-                ).fetchone()
-                self.assertEqual(removed["play_count"], 0)
-                self.assertIsNone(removed["last_played"])
-                self.assertEqual(
-                    store.db.execute(
-                        "SELECT COUNT(*) FROM play_events WHERE raw_title='Third (Show)'"
-                    ).fetchone()[0],
-                    0,
-                )
+                catalog = store.catalog()["songs"]
+                group = next(item for item in catalog if item["id"] == "group:combined")
+                separated = next(item for item in catalog if item["title"] == "Second")
+                self.assertEqual(group["play_count"], 1)
+                self.assertEqual(separated["play_count"], 1)
 
                 store.save_groups([{
                     "id": "combined",
                     "display_name": "Combined (Show)",
                     "members": ["First (Show)", "Second (Show)", "Third (Show)"],
                 }])
-                self.assertEqual(store.catalog()["songs"][0]["play_count"], 0)
+                self.assertEqual(store.catalog()["songs"][0]["play_count"], 2)
             finally:
                 store.close()
 
