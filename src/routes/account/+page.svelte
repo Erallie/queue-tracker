@@ -68,7 +68,7 @@
           class="button secondary provider login-provider-button"
           type="button"
           onclick={() => connect(provider.id, 'login')}
-        ><img class="provider-mark" src={provider.icon} alt="" /><span>Continue with {provider.name}</span></button>
+        ><img class="provider-mark" src={provider.icon} alt="" /><span>Sign in</span></button>
       {/each}
     </div>
   </section>
@@ -97,7 +97,7 @@
               class="button secondary provider login-provider-button provider-action-button"
               type="button"
               onclick={() => connect(provider.id, 'link')}
-            ><img class="provider-mark" src={provider.icon} alt="" /><span>Continue with {provider.name}</span></button>
+            ><img class="provider-mark" src={provider.icon} alt="" /><span>Sign in</span></button>
           {/if}
         </article>
       {/each}
