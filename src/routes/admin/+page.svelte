@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ExternalArrow from '$lib/ExternalArrow.svelte';
   import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
   import { tagVisualStyle } from '$lib/color';
   import { normalizeSearch } from '$lib/search';
@@ -258,10 +259,10 @@
       <nav class="editor-destinations" aria-label="Places to update the song list">
         <span class="muted">Update the published song list:</span>
         <a class="external-inline-link" href="https://www.twitch.tv/erallie/about" target="_blank" rel="noopener noreferrer">
-          <span>Twitch About</span><span class="external-nav-arrow" aria-hidden="true">&#x2197;&#xFE0E;</span>
+          <span>Twitch About</span><ExternalArrow />
         </a>
         <a class="external-inline-link" href="https://mustardmine.com/channels/erallie/queue" target="_blank" rel="noopener noreferrer">
-          <span>MustardMine Queue</span><span class="external-nav-arrow" aria-hidden="true">&#x2197;&#xFE0E;</span>
+          <span>MustardMine Queue</span><ExternalArrow />
         </a>
       </nav>
     {:else if tab === 'groups'}

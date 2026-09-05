@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { accountChangedEvent, getAccount } from '$lib/api';
+  import ExternalArrow from '$lib/ExternalArrow.svelte';
   import LightDarkSwitcher from '$lib/LightDarkSwitcher.svelte';
   import logo from '$lib/assets/brand/gozar-productions-logo.svg';
   import type { Account } from '$lib/types';
@@ -59,7 +60,7 @@
         <a class:active={page.url.pathname.startsWith(`${base}/admin`)} href={`${base}/admin`}>Dashboard</a>
       {/if}
       <a class="external-nav-link" href="https://GozarProductions.com" rel="external">
-        <span>Gozar Productions</span><span class="external-nav-arrow" aria-hidden="true">&#x2197;&#xFE0E;</span>
+        <span>Gozar Productions</span><ExternalArrow />
       </a>
     </nav>
   </header>
