@@ -78,6 +78,7 @@ td { padding: 1rem; border-top: 1px solid rgba(var(--line), .22); vertical-align
 tbody tr:hover { background: rgba(var(--foreground), .06); }
 .song-title { color: rgb(var(--foreground)); font-size: 1rem; font-weight: 650; }
 .song-parenthetical { color: rgb(var(--muted)); }
+.mobile-song-parenthetical { display: none; color: rgb(var(--muted)); }
 .number { font-variant-numeric: tabular-nums; text-align: center; }
 .request-cell { text-align: right; }
 
@@ -188,6 +189,34 @@ code { color: rgb(var(--accent)); }
   .tracker-table th:nth-child(4), .tracker-table td:nth-child(4), .tracker-table th:nth-child(5), .tracker-table td:nth-child(5) { display: table-cell; }
   td, th { padding: .75rem .65rem; }
   .request-cell .button { padding-inline: .6rem; }
+
+  .song-table-wrap { overflow-x: hidden; }
+  .song-table, .song-table tbody { display: block; width: 100%; }
+  .song-table thead { display: none; }
+  .song-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'song request'
+      'tags request';
+    align-items: center;
+    gap: .45rem .75rem;
+    padding: .85rem .75rem;
+    border-top: 1px solid rgba(var(--line), .22);
+  }
+  .song-table tbody tr:first-child { border-top: 0; }
+  .song-table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .song-table .song-name-cell { grid-area: song; }
+  .song-table .song-title, .song-table .mobile-song-parenthetical { overflow-wrap: anywhere; }
+  .song-table .mobile-song-parenthetical { display: block; margin-top: .18rem; font-size: .88rem; line-height: 1.35; }
+  .song-table .desktop-song-parenthetical,
+  .song-table .song-last-played,
+  .song-table .song-play-count { display: none; }
+  .song-table .song-tags-cell { grid-area: tags; }
+  .song-table .song-tags-cell .tag-list { gap: .25rem; }
+  .song-table .song-tags-cell .tag { min-height: 19px; padding: .08rem .36rem; font-size: .58rem; line-height: 1.2; }
+  .song-table .request-cell { grid-area: request; align-self: center; white-space: nowrap; }
+  .song-table .request-cell .button { min-height: 36px; padding: .48rem .62rem; font-size: .66rem; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }

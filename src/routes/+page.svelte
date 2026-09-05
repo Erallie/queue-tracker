@@ -150,17 +150,20 @@
   {:else if filtered.length === 0}
     <div class="empty"><strong>No songs match those filters.</strong><br />Try a different search or remove a tag.</div>
   {:else}
-    <div class="table-wrap">
-      <table>
+    <div class="table-wrap song-table-wrap">
+      <table class="song-table">
         <thead><tr><th>Title</th><th>Artist / Musical</th><th>Tags</th><th>Last played</th><th class="number">Times played</th><th><span class="sr-only">Request</span></th></tr></thead>
         <tbody>
           {#each filtered as song (song.id)}
             <tr>
-              <td><div class="song-title">{song.title}</div></td>
-              <td class="song-parenthetical">{song.parenthetical}</td>
-              <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
-              <td>{relativeTime(song.last_played, clock)}</td>
-              <td class="number">{song.play_count}</td>
+              <td class="song-name-cell">
+                <div class="song-title">{song.title}</div>
+                <div class="mobile-song-parenthetical">{song.parenthetical}</div>
+              </td>
+              <td class="song-parenthetical desktop-song-parenthetical">{song.parenthetical}</td>
+              <td class="song-tags-cell"><div class="tag-list">{#each song.tags as tag}<span class="tag" style={`--tag:${tagColors[tag] || '#ab212a'}`}>{tag}</span>{/each}</div></td>
+              <td class="song-last-played">{relativeTime(song.last_played, clock)}</td>
+              <td class="number song-play-count">{song.play_count}</td>
               <td class="request-cell"><button class="button small" disabled={requesting === song.id} onclick={() => queue(song)}>{requesting === song.id ? 'Sending…' : account.authenticated ? 'Request' : 'Sign in'}</button></td>
             </tr>
           {/each}
