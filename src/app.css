@@ -194,7 +194,7 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .metric strong { display: block; margin-top: .2rem; color: rgb(var(--foreground)); font-size: 1.8rem; font-weight: 400; }
 code { color: rgb(var(--accent)); }
 .legal-document { max-width: 920px; margin-inline: auto; }
-.legal-document h2 { margin-top: 2rem; font-size: clamp(1.25rem, 2.3vw, 1.65rem); }
+.legal-document h2 { margin-top: 2rem; font-size: clamp(1.25rem, 2.3vw, 1.65rem); font-weight: 500; }
 .legal-document h3 { margin-top: 1.4rem; font-weight: 650; }
 .legal-document p, .legal-document li { line-height: 1.7; }
 .legal-document ul { padding-left: 1.3rem; }
@@ -203,7 +203,7 @@ code { color: rgb(var(--accent)); }
 .legal-document h2[id], .legal-document h3[id], .page-intro h1[id] { scroll-margin-top: 130px; }
 .legal-heading-link { color: inherit; text-decoration: none; text-underline-offset: .14em; }
 .legal-heading-link:hover, .legal-heading-link:focus-visible { text-decoration: underline; }
-.legal-document a:not(.legal-heading-link) { color: rgb(var(--accent)); text-decoration: none; text-underline-offset: 3px; }
+.legal-document a:not(.legal-heading-link) { color: rgb(var(--accent)); font-weight: 450; text-decoration: none; text-underline-offset: 3px; }
 .legal-document a:not(.legal-heading-link):hover, .legal-document a:not(.legal-heading-link):focus-visible { text-decoration: underline; }
 
 @media (max-width: 900px) {
