@@ -208,7 +208,7 @@ code { color: rgb(var(--accent)); }
   .tracker-table td:nth-child(4) { padding-inline: .1rem; }
   .tracker-table td:nth-child(5) { padding-inline: .2rem; }
   .tracker-actions { flex-direction: column; flex-wrap: nowrap; gap: .22rem; align-items: stretch; }
-  .tracker-actions .button.small { width: 3.25rem; min-width: 0; min-height: 25px; align-self: center; padding: .16rem .25rem; line-height: 1.05; white-space: normal; }
+  .tracker-actions .button.small { width: 4rem; min-width: 0; min-height: 25px; align-self: center; padding: .16rem .25rem; line-height: 1.05; white-space: normal; }
   .tracker-actions .increase-play { order: 1; }
   .tracker-actions .decrease-play { order: 2; }
   .tracker-actions .remove-new { order: 3; padding-inline: 0; font-size: .55rem; letter-spacing: .025em; }
