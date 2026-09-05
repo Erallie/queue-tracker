@@ -58,6 +58,7 @@
       {#if account.authenticated && account.is_admin}
         <a class:active={page.url.pathname.startsWith(`${base}/admin`)} href={`${base}/admin`}>Dashboard</a>
       {/if}
+      <a href="https://GozarProductions.com" rel="external">Gozar Productions ↗</a>
     </nav>
   </header>
 
