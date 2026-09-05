@@ -29,7 +29,18 @@
     } catch (caught) { error = caught instanceof Error ? caught.message : 'Could not disconnect account'; }
   }
 
-  onMount(async () => { me = await getAccount(); loading = false; });
+  onMount(async () => {
+    const parameters = new URLSearchParams(location.search);
+    const authenticationError = parameters.get('auth_error');
+    if (authenticationError) {
+      error = authenticationError;
+      parameters.delete('auth_error');
+      const query = parameters.toString();
+      history.replaceState(history.state, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+    }
+    me = await getAccount();
+    loading = false;
+  });
 </script>
 
 <svelte:head><title>Account — Erallie's Song Queue</title></svelte:head>

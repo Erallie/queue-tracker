@@ -15,6 +15,7 @@ from aiohttp import web
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
+from .auth_errors import provider_auth_error, return_to_with_error
 from .database import Store
 from .oauth import PROVIDERS, authorize_url, exchange, profile
 from .queue import QueueBridge, SongAlreadyQueuedError, hourly_maintenance
@@ -314,6 +315,9 @@ class Service:
         if origin not in self.origins: raise web.HTTPBadRequest(text="Unknown return address")
         return value
 
+    def auth_error_redirect(self, return_to: str, message: str) -> web.HTTPFound:
+        return web.HTTPFound(return_to_with_error(return_to, message))
+
     async def begin_auth(self, request: web.Request) -> web.Response:
         provider = request.match_info["provider"]
         if provider not in PROVIDERS: raise web.HTTPNotFound()
@@ -331,16 +335,29 @@ class Service:
         provider = request.match_info["provider"]
         pending = self.store.pop_oauth_state(request.query.get("state", ""))
         if not pending or pending["provider"] != provider: raise web.HTTPBadRequest(text="This sign-in attempt expired. Please try again.")
+        provider_error = request.query.get("error", "")
+        if provider_error:
+            message = provider_auth_error(provider, provider_error, request.query.get("error_description", ""))
+            logging.info("%s OAuth callback returned %s", provider.title(), provider_error)
+            raise self.auth_error_redirect(pending["return_to"], message)
         client_id = os.getenv(f"{provider.upper()}_CLIENT_ID", "")
         client_secret = os.getenv(f"{provider.upper()}_CLIENT_SECRET", "")
         callback = f"{self.public_url}/auth/{provider}/callback"
         assert self.http
-        tokens = await exchange(self.http, provider, client_id, client_secret, callback, request.query.get("code", ""))
-        identity = await profile(self.http, provider, tokens["access_token"], client_id)
+        try:
+            tokens = await exchange(self.http, provider, client_id, client_secret, callback, request.query.get("code", ""))
+            identity = await profile(self.http, provider, tokens["access_token"], client_id)
+        except RuntimeError as error:
+            logging.warning("%s OAuth failed: %s", provider.title(), error)
+            raise self.auth_error_redirect(pending["return_to"], provider_auth_error(provider, "oauth_failed", str(error)))
+        except Exception:
+            logging.exception("Unexpected %s OAuth failure", provider.title())
+            raise self.auth_error_redirect(pending["return_to"], f"{provider.title()} authentication could not be completed. Please try again.")
         existing_user = self.store.identity_user(provider, identity["id"])
         if pending["mode"] == "link":
             user_id = pending["user_id"]
-            if existing_user and existing_user != user_id: raise web.HTTPConflict(text="That identity belongs to another account")
+            if existing_user and existing_user != user_id:
+                raise self.auth_error_redirect(pending["return_to"], f"That {provider.title()} identity belongs to another account.")
         else:
             user_id = existing_user or self.store.create_user()
         self.store.save_identity(user_id, provider, identity["id"], identity["name"], identity["avatar"], self.cipher.encrypt(tokens["access_token"].encode()).decode(), self.cipher.encrypt(tokens["refresh_token"].encode()).decode() if tokens["refresh_token"] else "")
