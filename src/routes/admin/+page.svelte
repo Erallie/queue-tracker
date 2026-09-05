@@ -151,11 +151,6 @@
     status = cleaned ? 'Cleaned song text copied' : 'Editable song text copied';
   }
 
-  async function pasteText() {
-    settings.song_text = await navigator.clipboard.readText();
-    status = 'Clipboard text pasted. Save when it looks right.';
-  }
-
   async function runSave(action: () => Promise<void>, message: string) {
     saving = true; status = ''; error = '';
     try { await action(); status = message; }
@@ -233,7 +228,7 @@
   <section class="panel">Opening the dashboard…</section>
 {:else}
   {#if !me.is_admin}
-    <section class="panel"><h2>Owner access only</h2><p class="muted">Sign in on the Account page with Erallie's owner account to open the song-text editor, copy/paste tools, groups, tags, play history, and settings.</p></section>
+    <section class="panel"><h2>Owner access only</h2><p class="muted">Sign in on the Account page with Erallie's owner account to open the song-text editor, copy tools, groups, tags, play history, and settings.</p></section>
   {:else}
     {#if status}<div class="notice success" role="status">{status}</div>{/if}
     {#if error}<div class="notice error" role="alert">{error}</div>{/if}
@@ -242,7 +237,7 @@
     <div class="metric"><span class="muted">Songs</span><strong>{catalog.songs.length}</strong></div>
     <div class="metric"><span class="muted">New</span><strong>{catalog.songs.filter((song) => song.is_new).length}</strong></div>
     <div class="metric"><span class="muted">Groups</span><strong>{groups.length}</strong></div>
-    <div class="metric"><span class="muted">Total perfor&shy;mances</span><strong>{catalog.songs.reduce((sum, song) => sum + song.play_count, 0)}</strong></div>
+    <div class="metric"><span class="muted">Total songs sung</span><strong>{catalog.songs.reduce((sum, song) => sum + song.play_count, 0)}</strong></div>
     </div>
 
     <section class="panel">
@@ -255,7 +250,7 @@
     {#if tab === 'songs'}
       <div class="section-heading"><div><h2>Editable song list</h2><p class="muted">Keep the same heading and one-song-per-line format. Adding or removing <code>[New]</code> updates tracking immediately.</p></div></div>
       <MarkdownEditor bind:value={settings.song_text} />
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button><button class="button secondary" onclick={pasteText}>Paste from clipboard</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button></div>
       <nav class="editor-destinations" aria-label="Places to update the song list">
         <span class="muted">Update the published song list:</span>
         <a class="external-inline-link" href="https://www.twitch.tv/erallie/about" target="_blank" rel="noopener noreferrer">
