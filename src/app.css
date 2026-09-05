@@ -190,8 +190,8 @@ code { color: rgb(var(--accent)); }
   h1 { font-size: clamp(2rem, 12vw, 3.5rem); }
   .metric-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .35rem; }
   .metric { min-width: 0; padding: .55rem .35rem; text-align: center; }
-  .metric .muted { display: block; font-size: .55rem; line-height: 1.2; overflow-wrap: anywhere; }
-  .metric strong { margin-top: .15rem; font-size: 1.15rem; }
+  .metric .muted { display: block; line-height: 1.2; overflow-wrap: anywhere; }
+  .metric strong { margin-top: .15rem; }
   th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5) { display: none; }
   .tracker-table th:nth-child(2), .tracker-table td:nth-child(2), .tracker-table th:nth-child(3), .tracker-table td:nth-child(3) { display: none; }
   .tracker-table th:nth-child(4), .tracker-table td:nth-child(4), .tracker-table th:nth-child(5), .tracker-table td:nth-child(5) { display: table-cell; }
@@ -202,25 +202,16 @@ code { color: rgb(var(--accent)); }
   .tracker-table th:first-child { width: auto; }
   .tracker-table th:nth-child(4) { width: 3.25rem; }
   .tracker-table th:nth-child(5) { width: 4rem; }
-  .tracker-table th:nth-child(4), .tracker-table th:nth-child(5) { padding: .45rem .15rem; font-size: .55rem; line-height: 1.15; white-space: normal; }
+  .tracker-table th:nth-child(4), .tracker-table th:nth-child(5) { padding: .45rem .15rem; line-height: 1.15; white-space: normal; }
   .tracker-table td { padding: .55rem .3rem; }
   .tracker-table td:first-child { overflow-wrap: anywhere; }
-  .tracker-table td:nth-child(4) { padding-inline: .1rem; font-size: .78rem; }
+  .tracker-table td:nth-child(4) { padding-inline: .1rem; }
   .tracker-table td:nth-child(5) { padding-inline: .2rem; }
   .tracker-actions { flex-direction: column; flex-wrap: nowrap; gap: .22rem; align-items: stretch; }
-  .tracker-actions .button.small { width: 100%; min-height: 25px; padding: .16rem .25rem; font-size: .58rem; line-height: 1.05; letter-spacing: .03em; white-space: normal; }
+  .tracker-actions .button.small { width: 100%; min-height: 25px; padding: .16rem .25rem; line-height: 1.05; white-space: normal; }
 
-  .tag-assignment-wrap { overflow-x: hidden; }
-  .tag-assignment-table { width: 100%; table-layout: fixed; }
-  .tag-assignment-table th:first-child { width: 38%; }
-  .tag-assignment-table th:last-child { width: 62%; }
-  .tag-assignment-table th, .tag-assignment-table td { padding: .55rem .4rem; }
-  .tag-assignment-table .song-title { font-size: .78rem; line-height: 1.25; overflow-wrap: anywhere; }
-  .tag-assignment-table small { font-size: .65rem; line-height: 1.2; overflow-wrap: anywhere; }
-  .tag-assignment-table .tag-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .24rem; }
-  .tag-assignment-table .tag-check { min-width: 0; gap: .2rem; padding: .16rem .28rem; border-radius: 8px; font-size: .55rem; line-height: 1.1; }
+  .tag-assignment-table .tag-check { gap: .2rem; }
   .tag-assignment-table .tag-check input { flex: 0 0 auto; width: 13px; height: 13px; }
-  .tag-assignment-table .tag-check span { min-width: 0; overflow-wrap: anywhere; }
 
   .song-table-wrap { overflow-x: hidden; }
   .song-table, .song-table tbody { display: block; width: 100%; }

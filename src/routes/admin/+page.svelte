@@ -241,7 +241,7 @@
     <div class="metric"><span class="muted">Songs</span><strong>{catalog.songs.length}</strong></div>
     <div class="metric"><span class="muted">New</span><strong>{catalog.songs.filter((song) => song.is_new).length}</strong></div>
     <div class="metric"><span class="muted">Groups</span><strong>{groups.length}</strong></div>
-    <div class="metric"><span class="muted">Total performances</span><strong>{catalog.songs.reduce((sum, song) => sum + song.play_count, 0)}</strong></div>
+    <div class="metric"><span class="muted">Total perfor&shy;mances</span><strong>{catalog.songs.reduce((sum, song) => sum + song.play_count, 0)}</strong></div>
     </div>
 
     <section class="panel">
@@ -372,7 +372,7 @@
       {#if trackedSongs.length === 0}
         <div class="empty"><strong>No songs match those filters.</strong><br />Try a different search or remove a tag.</div>
       {:else}
-        <div class="table-wrap"><table class="tracker-table"><thead><tr><th>Song</th><th>Tags</th><th>Last played</th><th class="number">Times played</th><th>Adjust</th></tr></thead><tbody>
+        <div class="table-wrap"><table class="tracker-table"><thead><tr><th>Song</th><th>Tags</th><th>Last played</th><th class="number">Times<br />played</th><th>Adjust</th></tr></thead><tbody>
           {#each trackedSongs as song (song.id)}
             <tr>
               <td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td>
