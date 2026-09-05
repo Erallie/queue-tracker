@@ -125,11 +125,23 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .notice.success { border-left-color: rgb(var(--green)); }
 .notice.error { border-left-color: rgb(var(--danger)); }
 .empty { padding: 3rem 1rem; text-align: center; color: rgb(var(--muted)); }
-.account-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1rem; }
+.account-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 32px; }
+.login-panel { display: flex; align-items: center; justify-content: flex-start; gap: 32px; }
+.login-panel .login-copy { flex: 0 1 550px; margin: 0; }
+.login-provider-grid { flex: 0 1 300px; width: min(100%, 300px); margin-inline: auto; grid-template-columns: minmax(0, 300px); justify-content: center; gap: .7rem; }
+.login-provider-button.button { width: 100%; min-height: 40px; padding: 9px 12px; gap: 10px; border-radius: 4px; background: #fff; font-family: 'Google Sans', Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: normal; text-transform: none; }
+.login-provider-button.button .provider-mark { flex-basis: 20px; width: 20px; height: 20px; }
+.app-shell.dark .login-provider-button.button { background: #131314; }
 .account-card { display: grid; height: 100%; gap: 1rem; box-shadow: none; }
 .account-grid > .account-card { margin-top: 0; }
 .provider { display: flex; align-items: center; gap: .85rem; }
 .provider-mark { display: block; flex: 0 0 42px; width: 42px; height: 42px; object-fit: contain; }
+.google-sign-in.button { gap: 10px; min-height: 40px; padding: 9px 12px; border: 1px solid #747775; border-radius: 4px; color: #1f1f1f; background: #fff; font-family: 'Google Sans', Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: normal; text-transform: none; box-shadow: none; }
+.google-sign-in.button .provider-mark { flex-basis: 20px; width: 20px; height: 20px; margin: 0; }
+.google-sign-in.button:hover { background: #f8faff; filter: none; }
+.google-sign-in.button:focus-visible { outline: 2px solid #0b57d0; outline-offset: 2px; }
+.app-shell.dark .google-sign-in.button { border-color: #8e918f; color: #e3e3e3; background: #131314; }
+.app-shell.dark .google-sign-in.button:hover { background: #1f1f20; }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: rgb(var(--green)); }
 .section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 1.2rem; }
 .tabs { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(var(--line), .35); }
@@ -180,6 +192,9 @@ code { color: rgb(var(--accent)); }
   .page-intro { grid-template-columns: 1fr; }
   .script-note { display: none; }
   .toolbar, .form-grid, .account-grid, .metric-row { grid-template-columns: 1fr; }
+  .login-panel { flex-direction: column; align-items: stretch; }
+  .login-panel .login-copy { flex-basis: auto; }
+  .login-provider-grid { flex-basis: auto; align-self: center; }
   .group-card { grid-template-columns: 1fr; }
 }
 

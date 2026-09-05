@@ -1,1 +1,0 @@
-import{a as e,e as o}from"./D5rxLpHd.js";import{N as s}from"./BwoaGTyr.js";s();var t=o('<svg class="external-nav-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 12 12 4M6 4h6v6"></path></svg>');function n(a){var r=t();e(a,r)}export{n as E};

@@ -53,11 +53,16 @@
 {#if loading}
   <section class="panel">Loading your account…</section>
 {:else if !me.authenticated}
-  <section class="panel">
-    <div class="section-heading"><div><h2>Sign in to request</h2><p class="muted">Choose any provider. Your password is never shared with this site.</p></div></div>
-    <div class="account-grid">
+  <section class="panel login-panel">
+    <div class="section-heading login-copy"><div><h2>Sign in to request</h2><p class="muted">Choose any provider. Your password is never shared with this site.</p></div></div>
+    <div class="account-grid login-provider-grid">
       {#each providers as provider}
-        <button class="button secondary provider" type="button" onclick={() => connect(provider.id, 'login')}><img class="provider-mark" src={provider.icon} alt="" /><span>Continue with {provider.name}</span></button>
+        <button
+          class:google-sign-in={provider.id === 'google'}
+          class="button secondary provider login-provider-button"
+          type="button"
+          onclick={() => connect(provider.id, 'login')}
+        ><img class="provider-mark" src={provider.icon} alt="" /><span>Continue with {provider.name}</span></button>
       {/each}
     </div>
   </section>
