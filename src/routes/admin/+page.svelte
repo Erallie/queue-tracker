@@ -348,7 +348,7 @@
       {#if tagAssignmentSongs.length === 0}
         <div class="empty"><strong>No songs match those filters.</strong><br />Try a different search or remove a tag.</div>
       {:else}
-        <div class="table-wrap"><table><thead><tr><th>Song</th><th>Tags</th></tr></thead><tbody>
+        <div class="table-wrap tag-assignment-wrap"><table class="tag-assignment-table"><thead><tr><th>Song</th><th>Tags</th></tr></thead><tbody>
           {#each tagAssignmentSongs as song (song.id)}
             <tr><td><span class="song-title">{song.title}</span><br /><small class="muted">{song.parenthetical}</small></td><td><div class="tag-list">{#each catalog.tags.filter((item) => item.name !== 'New') as tag}<label class="tag-check" style={tagVisualStyle(tag.color)}><input type="checkbox" checked={song.tags.includes(tag.name)} onchange={(event) => toggleSongTag(song.id, tag.name, event.currentTarget.checked)} /><span>{tag.name}</span></label>{/each}</div></td></tr>
           {/each}
