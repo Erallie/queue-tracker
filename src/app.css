@@ -201,7 +201,7 @@ code { color: rgb(var(--accent)); }
   .tracker-table { width: 100%; table-layout: fixed; }
   .tracker-table th:first-child { width: auto; }
   .tracker-table th:nth-child(4) { width: 5rem; }
-  .tracker-table th:nth-child(5) { width: 5.5rem; }
+  .tracker-table th:nth-child(5) { width: 4.5rem; }
   .tracker-table th:nth-child(4), .tracker-table th:nth-child(5) { padding: .45rem .15rem; line-height: 1.15; white-space: normal; }
   .tracker-table td { padding: .55rem .3rem; }
   .tracker-table td:first-child { overflow-wrap: anywhere; }
@@ -209,6 +209,9 @@ code { color: rgb(var(--accent)); }
   .tracker-table td:nth-child(5) { padding-inline: .2rem; }
   .tracker-actions { flex-direction: column; flex-wrap: nowrap; gap: .22rem; align-items: stretch; }
   .tracker-actions .button.small { width: 100%; min-height: 25px; padding: .16rem .25rem; line-height: 1.05; white-space: normal; }
+  .tracker-actions .increase-play { order: 1; }
+  .tracker-actions .decrease-play { order: 2; }
+  .tracker-actions .remove-new { order: 3; font-size: .55rem; letter-spacing: .025em; }
 
   .tag-assignment-table .tag-list { gap: .35rem; }
   .tag-assignment-table .tag-check { min-width: 0; gap: .3rem; padding: .25rem .4rem; font-size: .68rem; overflow-wrap: anywhere; }

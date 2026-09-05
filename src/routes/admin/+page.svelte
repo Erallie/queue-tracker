@@ -379,7 +379,7 @@
               <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={tagVisualStyle(tagColors[tag] || '#ab212a')}>{tag}</span>{/each}</div></td>
               <td>{relativeTime(song.last_played, clock)}</td>
               <td class="number">{song.play_count}</td>
-              <td><div class="actions tracker-actions"><button class="button secondary small" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, -1); Object.assign(song, result.song); }}>−</button><button class="button small" aria-label={`Increase plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, 1); Object.assign(song, result.song); }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
+              <td><div class="actions tracker-actions"><button class="button secondary small decrease-play" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, -1); Object.assign(song, result.song); }}>−</button><button class="button small increase-play" aria-label={`Increase plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, 1); Object.assign(song, result.song); }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
             </tr>
           {/each}
         </tbody></table></div>
