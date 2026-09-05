@@ -307,7 +307,7 @@
           </div>
         {/each}
       </div>
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveGroups(groups), 'Song groups saved')}>Save groups</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveGroups(groups); ({ settings, groups, catalog } = await getAdmin()); }, 'Song groups saved')}>Save groups</button></div>
     {:else if tab === 'tags'}
       <div class="section-heading"><div><h2>Tags and ranking points</h2><p class="muted">Use the arrows to choose the order tags appear. Higher point totals rank songs first, while New songs always stay above every other song.</p></div><button class="button secondary small" onclick={addTag}>Add tag</button></div>
       <div class="stack">
@@ -330,7 +330,7 @@
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveTags(catalog.tags), 'Tag groups saved')}>Save tag groups</button></div>
       <h3 style="margin-top:2rem">Assign tags to songs</h3>
-      <p class="muted">A grouped song applies the selected tags to the version used for requests.</p>
+      <p class="muted">Grouped-song tags are stored on the group itself and do not overwrite the tags on its member songs.</p>
       <div class="toolbar">
         <div class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>

@@ -47,6 +47,9 @@ class Store:
         self.migrate()
 
     def migrate(self) -> None:
+        had_group_tags = bool(self.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='group_tags'"
+        ).fetchone())
         self.db.executescript("""
         CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS identities(
@@ -79,6 +82,10 @@ class Store:
           raw_title TEXT NOT NULL REFERENCES songs(raw_title) ON DELETE CASCADE,
           tag_name TEXT NOT NULL REFERENCES tags(name) ON DELETE CASCADE,
           PRIMARY KEY(raw_title, tag_name));
+        CREATE TABLE IF NOT EXISTS group_tags(
+          group_id TEXT NOT NULL REFERENCES song_groups(id) ON DELETE CASCADE,
+          tag_name TEXT NOT NULL REFERENCES tags(name) ON DELETE CASCADE,
+          PRIMARY KEY(group_id, tag_name));
         CREATE TABLE IF NOT EXISTS requests(
           id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
           raw_title TEXT NOT NULL, request_name TEXT NOT NULL, requested_at TEXT NOT NULL,
@@ -120,6 +127,16 @@ class Store:
                 {"display_name": "Somewhere Over the Rainbow (Judy Garland)", "members": ["Somewhere Over the Rainbow - Jazz Cover (The Wizard of Oz)", "Somewhere Over the Rainbow (Judy Garland)"]},
                 {"display_name": "Crossing the Line (Rapunzel's Tangled Adventure)", "members": ["Crossing the Line (Rapunzel's Tangled Adventure)", "Crossing the Line (Tangled the Series)"]},
             ])
+        if not had_group_tags:
+            for group in self.db.execute("SELECT id FROM song_groups").fetchall():
+                members = [
+                    row["raw_title"]
+                    for row in self.db.execute(
+                        "SELECT raw_title FROM group_members WHERE group_id=?",
+                        (group["id"],),
+                    )
+                ]
+                self._save_group_tags(group["id"], self._member_tag_names(members), commit=False)
         self._trim_all_play_history()
         self.db.commit()
 
@@ -209,15 +226,51 @@ class Store:
             self.db.execute(f"DELETE FROM song_tags WHERE raw_title NOT IN ({placeholders})", tuple(active))
 
     def save_groups(self, groups: list[dict[str, Any]]) -> None:
-        self.db.execute("DELETE FROM song_groups")
+        old_grouped = {
+            row["raw_title"] for row in self.db.execute("SELECT raw_title FROM group_members")
+        }
+        saved_group_tags = {
+            group["id"]: [
+                row["tag_name"]
+                for row in self.db.execute(
+                    "SELECT tag_name FROM group_tags WHERE group_id=?", (group["id"],)
+                )
+            ]
+            for group in self.db.execute("SELECT id FROM song_groups").fetchall()
+        }
+        prepared: list[tuple[str, str, list[str], int]] = []
+        new_grouped: set[str] = set()
         for position, group in enumerate(groups):
             group_id = str(group.get("id") or uuid.uuid4())
             name = str(group.get("display_name") or "").strip()
-            members = [str(x).strip() for x in group.get("members", []) if str(x).strip()]
+            members = list(dict.fromkeys(
+                str(value).strip() for value in group.get("members", []) if str(value).strip()
+            ))
             if not name or len(members) < 2:
                 continue
+            prepared.append((group_id, name, members, position))
+            new_grouped.update(members)
+
+        self.db.execute("DELETE FROM song_groups")
+        for group_id, name, members, position in prepared:
             self.db.execute("INSERT INTO song_groups VALUES(?,?,?)", (group_id, name, position))
             self.db.executemany("INSERT INTO group_members VALUES(?,?,?)", ((group_id, member, index) for index, member in enumerate(members)))
+            tags = saved_group_tags.get(group_id)
+            if tags is None:
+                tags = self._member_tag_names(members)
+            self._save_group_tags(group_id, tags, commit=False)
+
+        removed_members = old_grouped - new_grouped
+        if removed_members:
+            placeholders = ",".join("?" for _ in removed_members)
+            parameters = tuple(removed_members)
+            self.db.execute(
+                f"DELETE FROM play_events WHERE raw_title IN ({placeholders})", parameters
+            )
+            self.db.execute(
+                f"UPDATE songs SET play_count=0,last_played=NULL WHERE raw_title IN ({placeholders})",
+                parameters,
+            )
         self._trim_all_play_history()
         self.db.commit()
         self._catalog_changed()
@@ -274,7 +327,7 @@ class Store:
                 last_played = max((row["last_played"] for row in rows if row["last_played"]), default=None)
                 is_new = any(row["is_new"] for row in rows)
                 song_id = f"group:{group['id']}"
-                tags = self._tags_for([row["raw_title"] for row in rows], is_new)
+                tags = self._tags_for_group(group["id"], is_new)
                 output.append(self._song_json(song_id, title, parenthetical, tags, is_new, play_count, last_played))
             else:
                 parenthetical = song["parenthetical"] or default_artist
@@ -300,6 +353,30 @@ class Store:
         else: tags.discard("New")
         positions = {row["name"]: row["position"] for row in self.db.execute("SELECT name,position FROM tags")}
         return sorted(tags, key=lambda value: (positions.get(value, 1_000_000), value.casefold()))
+
+    def _tags_for_group(self, group_id: str, is_new: bool) -> list[str]:
+        tags = {
+            row["tag_name"]
+            for row in self.db.execute(
+                "SELECT tag_name FROM group_tags WHERE group_id=?", (group_id,)
+            )
+        }
+        if is_new:
+            tags.add("New")
+        positions = {row["name"]: row["position"] for row in self.db.execute("SELECT name,position FROM tags")}
+        return sorted(tags, key=lambda value: (positions.get(value, 1_000_000), value.casefold()))
+
+    def _member_tag_names(self, raw_titles: list[str]) -> list[str]:
+        if not raw_titles:
+            return []
+        placeholders = ",".join("?" for _ in raw_titles)
+        return [
+            row["tag_name"]
+            for row in self.db.execute(
+                f"SELECT DISTINCT tag_name FROM song_tags WHERE raw_title IN ({placeholders}) AND tag_name!='New'",
+                tuple(raw_titles),
+            )
+        ]
 
     def _song_json(self, song_id: str, title: str, parenthetical: str, tags: list[str], is_new: bool, play_count: int, last_played: str | None) -> dict[str, Any]:
         points = 0
@@ -476,6 +553,12 @@ class Store:
         self._save_song_tags([raw_title], tags)
 
     def save_song_tags_for_id(self, song_id: str, tags: list[str]) -> bool:
+        if song_id.startswith("group:"):
+            group_id = song_id[6:]
+            if not self.db.execute("SELECT 1 FROM song_groups WHERE id=?", (group_id,)).fetchone():
+                return False
+            self._save_group_tags(group_id, tags)
+            return True
         raw_titles = self._titles_for_song_id(song_id)
         if not raw_titles:
             return False
@@ -494,6 +577,20 @@ class Store:
                     self.db.execute("INSERT OR IGNORE INTO song_tags VALUES(?,?)", (raw_title, tag))
         self.db.commit()
         self._catalog_changed()
+
+    def _save_group_tags(self, group_id: str, tags: list[str], commit: bool = True) -> None:
+        valid_tags = {
+            row["name"]
+            for row in self.db.execute("SELECT name FROM tags WHERE name!='New'")
+        }
+        self.db.execute("DELETE FROM group_tags WHERE group_id=?", (group_id,))
+        self.db.executemany(
+            "INSERT OR IGNORE INTO group_tags VALUES(?,?)",
+            ((group_id, tag) for tag in tags if tag in valid_tags),
+        )
+        if commit:
+            self.db.commit()
+            self._catalog_changed()
 
     def hourly_maintenance(self) -> list[str]:
         settings = self.settings()
