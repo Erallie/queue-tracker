@@ -30,6 +30,7 @@ export type Catalog = {
 export type QueueItem = {
   title: string;
   user: string;
+  can_remove?: boolean;
 };
 
 export type QueueState = {

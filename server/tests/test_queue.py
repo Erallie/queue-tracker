@@ -19,6 +19,9 @@ class FakeStore:
     def settings(self):
         return {}
 
+    def reconcile_requests(self, _queue):
+        pass
+
 
 class FakeSocket:
     closed = False
@@ -131,6 +134,23 @@ class QueueRequestTests(unittest.IsolatedAsyncioTestCase):
         self.bridge._handle({"cmd": "choose", "selection": "Song (Show)"})
         await pending
         self.assertEqual(self.bridge.socket.sent[0]["cmd"], "choose")
+
+    async def test_remove_sends_zero_based_unchoose_index_and_waits_for_update(self):
+        self.bridge.current_queue = [
+            {"title": "First (Show)", "user": "One"},
+            {"title": "Second (Show)", "user": "Two"},
+        ]
+        pending = asyncio.create_task(self.bridge.remove(1, "Second (Show)", "Two"))
+        await asyncio.sleep(0)
+        self.assertEqual(self.bridge.socket.sent, [{"cmd": "unchoose", "index": 1}])
+        self.bridge._handle({"cmd": "update", "queue": [{"title": "First (Show)", "user": "One"}]})
+        await pending
+
+    async def test_remove_refuses_a_changed_queue_position(self):
+        self.bridge.current_queue = [{"title": "Different (Show)", "user": "Viewer"}]
+        with self.assertRaisesRegex(RuntimeError, "queue changed"):
+            await self.bridge.remove(0, "Expected (Show)", "Viewer")
+        self.assertEqual(self.bridge.socket.sent, [])
 
 
 if __name__ == "__main__":

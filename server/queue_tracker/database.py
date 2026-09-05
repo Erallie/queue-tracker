@@ -22,6 +22,10 @@ def alphabetical_key(value: str) -> str:
     return folded
 
 
+def queue_key(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
 SEED_SONGLIST = (Path(__file__).resolve().parent.parent / "seed_songlist.md").read_text(encoding="utf-8")
 
 DEFAULT_SETTINGS = {
@@ -477,6 +481,71 @@ class Store:
     def record_request(self, user_id: str, raw_title: str, request_name: str) -> None:
         self.db.execute("INSERT INTO requests(id,user_id,raw_title,request_name,requested_at) VALUES(?,?,?,?,?)", (str(uuid.uuid4()), user_id, raw_title, request_name, now()))
         self.db.commit()
+
+    def reconcile_requests(self, queue: list[dict[str, str]]) -> None:
+        available: dict[tuple[str, str], int] = {}
+        for item in queue:
+            key = (queue_key(item.get("title", "")), queue_key(item.get("user", "")))
+            available[key] = available.get(key, 0) + 1
+        rows = self.db.execute(
+            "SELECT id,raw_title,request_name FROM requests WHERE status='queued' ORDER BY requested_at DESC,id DESC"
+        ).fetchall()
+        stale: list[str] = []
+        for row in rows:
+            key = (queue_key(row["raw_title"]), queue_key(row["request_name"]))
+            if available.get(key, 0) > 0:
+                available[key] -= 1
+            else:
+                stale.append(row["id"])
+        if stale:
+            self.db.executemany("UPDATE requests SET status='gone' WHERE id=?", ((request_id,) for request_id in stale))
+            self.db.commit()
+
+    def owned_queue_indexes(self, user_id: str | None, queue: list[dict[str, str]]) -> set[int]:
+        if not user_id:
+            return set()
+        twitch_names = {
+            queue_key(row["display_name"])
+            for row in self.db.execute(
+                "SELECT display_name FROM identities WHERE user_id=? AND provider='twitch'", (user_id,)
+            )
+        }
+        owned = {
+            index for index, item in enumerate(queue)
+            if queue_key(item.get("user", "")) in twitch_names and item.get("user", "").strip()
+        }
+        rows = self.db.execute(
+            "SELECT id,user_id,raw_title,request_name FROM requests WHERE status='queued' ORDER BY requested_at,id"
+        ).fetchall()
+        matched: set[int] = set()
+        for row in rows:
+            title = queue_key(row["raw_title"])
+            requester = queue_key(row["request_name"])
+            index = next((
+                index for index, item in enumerate(queue)
+                if index not in matched
+                and queue_key(item.get("title", "")) == title
+                and queue_key(item.get("user", "")) == requester
+            ), None)
+            if index is not None:
+                matched.add(index)
+                if row["user_id"] == user_id:
+                    owned.add(index)
+        return owned
+
+    def mark_request_removed(self, user_id: str, title: str, request_name: str) -> None:
+        row = next((
+            item for item in self.db.execute(
+                """SELECT id,raw_title,request_name FROM requests
+                   WHERE user_id=? AND status IN ('queued','gone') ORDER BY requested_at DESC""",
+                (user_id,),
+            )
+            if queue_key(item["raw_title"]) == queue_key(title)
+            and queue_key(item["request_name"]) == queue_key(request_name)
+        ), None)
+        if row:
+            self.db.execute("UPDATE requests SET status='removed' WHERE id=?", (row["id"],))
+            self.db.commit()
 
     def save_song_tags(self, raw_title: str, tags: list[str]) -> None:
         self._save_song_tags([raw_title], tags)

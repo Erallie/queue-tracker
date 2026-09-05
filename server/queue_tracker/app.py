@@ -46,6 +46,7 @@ class Service:
         app.router.add_get("/api/catalog/events", self.catalog_events)
         app.router.add_get("/api/queue", self.current_queue)
         app.router.add_get("/api/queue/events", self.queue_events)
+        app.router.add_delete("/api/queue/{index}", self.remove_queue_item)
         app.router.add_get("/api/me", self.me)
         app.router.add_post("/api/logout", self.logout)
         app.router.add_delete("/api/identities/{provider}", self.unlink)
@@ -180,8 +181,13 @@ class Service:
                 self.event_tasks.discard(task)
         return response
 
-    async def current_queue(self, _request: web.Request) -> web.Response:
-        return web.json_response({"queue": self.queue.current_queue, "connected": self.queue.connected, "queue_open": self.queue.queue_open})
+    def queue_for_user(self, user_id: str | None, queue: list[dict[str, str]] | None = None) -> list[dict[str, Any]]:
+        snapshot = queue if queue is not None else self.queue.current_queue
+        owned = self.store.owned_queue_indexes(user_id, snapshot)
+        return [{**item, "can_remove": index in owned} for index, item in enumerate(snapshot)]
+
+    async def current_queue(self, request: web.Request) -> web.Response:
+        return web.json_response({"queue": self.queue_for_user(self.user_id(request)), "connected": self.queue.connected, "queue_open": self.queue.queue_open})
 
     async def queue_events(self, request: web.Request) -> web.StreamResponse:
         headers = {
@@ -192,6 +198,7 @@ class Service:
         origin = request.headers.get("Origin", "").rstrip("/")
         if origin in self.origins:
             headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
             headers["Vary"] = "Origin"
         response = web.StreamResponse(headers=headers)
         await response.prepare(request)
@@ -203,7 +210,7 @@ class Service:
             while True:
                 try:
                     queue = await asyncio.wait_for(listener.get(), timeout=20)
-                    payload = {"queue": queue, "connected": self.queue.connected, "queue_open": self.queue.queue_open}
+                    payload = {"queue": self.queue_for_user(self.user_id(request), queue), "connected": self.queue.connected, "queue_open": self.queue.queue_open}
                     await response.write(f"event: queue\ndata: {json.dumps(payload)}\n\n".encode())
                 except TimeoutError:
                     await response.write(b": keepalive\n\n")
@@ -214,6 +221,25 @@ class Service:
             if task:
                 self.event_tasks.discard(task)
         return response
+
+    async def remove_queue_item(self, request: web.Request) -> web.Response:
+        user_id = self.require_user(request)
+        try:
+            index = int(request.match_info["index"])
+        except ValueError:
+            raise web.HTTPBadRequest(text='{"error":"Invalid queue position"}', content_type="application/json")
+        queue = self.queue.current_queue
+        if index < 0 or index >= len(queue):
+            raise web.HTTPNotFound(text='{"error":"That request is no longer in the queue"}', content_type="application/json")
+        if index not in self.store.owned_queue_indexes(user_id, queue):
+            raise web.HTTPForbidden(text='{"error":"You can only remove your own requests"}', content_type="application/json")
+        item = dict(queue[index])
+        try:
+            await self.queue.remove(index, item["title"], item["user"])
+        except RuntimeError as error:
+            return web.json_response({"error": str(error)}, status=503)
+        self.store.mark_request_removed(user_id, item["title"], item["user"])
+        return web.json_response({"removed": True})
 
     async def me(self, request: web.Request) -> web.Response:
         user_id = self.user_id(request)

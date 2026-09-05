@@ -29,6 +29,8 @@ class QueueBridge:
         self._send_lock = asyncio.Lock()
         self._choose_reply: asyncio.Future[dict[str, Any]] | None = None
         self._choose_expected: tuple[str, str, int] | None = None
+        self._unchoose_reply: asyncio.Future[dict[str, Any]] | None = None
+        self._unchoose_expected: tuple[int, list[dict[str, str]]] | None = None
         self.auth_cookie = os.getenv("MUSTARDMINE_COOKIE", "").strip()
 
     async def start(self) -> None:
@@ -79,10 +81,19 @@ class QueueBridge:
                 self._publish_queue()
                 if self._choose_reply and not self._choose_reply.done():
                     self._choose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the request"))
+                if self._unchoose_reply and not self._unchoose_reply.done():
+                    self._unchoose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the removal"))
             await asyncio.sleep(delay)
             delay = min(delay * 2, 60)
 
     def _handle(self, payload: dict[str, Any]) -> None:
+        if payload.get("cmd") == "unchoose":
+            if self._unchoose_reply and not self._unchoose_reply.done():
+                if payload.get("error"):
+                    self._unchoose_reply.set_exception(RuntimeError(str(payload["error"])))
+                else:
+                    self._unchoose_reply.set_result(payload)
+            return
         if payload.get("cmd") == "choose":
             if payload.get("error"):
                 logging.warning("MustardMine rejected a queue request: %s", payload["error"])
@@ -120,7 +131,13 @@ class QueueBridge:
             for item in queue
             if isinstance(item, dict) and item.get("title")
         ]
+        self.store.reconcile_requests(self.current_queue)
         self._publish_queue()
+        if self._unchoose_reply and not self._unchoose_reply.done() and self._unchoose_expected:
+            index, previous_queue = self._unchoose_expected
+            expected = previous_queue[:index] + previous_queue[index + 1:]
+            if self.current_queue == expected:
+                self._unchoose_reply.set_result({"cmd": "unchoose", "index": index, "confirmed_by": "queue_update"})
         if self._choose_reply and not self._choose_reply.done() and self._choose_expected:
             title, request_name, previous_count = self._choose_expected
             current_count = sum(item["title"] == title for item in self.current_queue)
@@ -206,6 +223,32 @@ class QueueBridge:
             if result.get("error"):
                 raise RuntimeError(str(result["error"]))
             logging.info("MustardMine confirmed the queue request for %r", result.get("selection") or title)
+
+    async def remove(self, index: int, expected_title: str, expected_user: str) -> None:
+        if not self.auth_cookie:
+            raise RuntimeError("Queue removals are not configured on the server")
+        async with self._send_lock:
+            if not self.socket or self.socket.closed:
+                raise RuntimeError("The request queue is temporarily disconnected")
+            if index < 0 or index >= len(self.current_queue):
+                raise RuntimeError("That request is no longer in the queue")
+            current = self.current_queue[index]
+            if current["title"] != expected_title or current["user"] != expected_user:
+                raise RuntimeError("The request queue changed; please try again")
+            reply = asyncio.get_running_loop().create_future()
+            self._unchoose_reply = reply
+            self._unchoose_expected = (index, list(self.current_queue))
+            try:
+                logging.info("Sending MustardMine queue removal for index %d (%r)", index, expected_title)
+                await self.socket.send_json({"cmd": "unchoose", "index": index})
+                await asyncio.wait_for(reply, timeout=10)
+            except TimeoutError as error:
+                logging.warning("MustardMine did not confirm removal for queue index %d", index)
+                raise RuntimeError("The request queue did not confirm the removal") from error
+            finally:
+                if self._unchoose_reply is reply:
+                    self._unchoose_reply = None
+                    self._unchoose_expected = None
 
     @staticmethod
     def _queue_title_key(title: str) -> str:

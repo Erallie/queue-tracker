@@ -45,7 +45,7 @@ export async function getQueue(): Promise<QueueState> {
 
 export function watchQueue(update: (state: QueueState) => void): () => void {
   if (!api || typeof EventSource === 'undefined') return () => {};
-  const events = new EventSource(`${api}/api/queue/events`);
+  const events = new EventSource(`${api}/api/queue/events`, { withCredentials: true });
   events.addEventListener('queue', (event) => {
     try { update(JSON.parse((event as MessageEvent).data) as QueueState); } catch { /* A reconnect delivers another snapshot. */ }
   });
@@ -64,6 +64,10 @@ export function authUrl(provider: string, mode = 'login'): string {
 
 export async function requestSong(songId: string): Promise<{ queued: boolean; message: string }> {
   return request(`/api/songs/${encodeURIComponent(songId)}/request`, { method: 'POST' });
+}
+
+export async function removeQueueItem(index: number): Promise<void> {
+  await request(`/api/queue/${index}`, { method: 'DELETE' });
 }
 
 export async function logout(): Promise<void> {

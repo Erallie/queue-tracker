@@ -7,6 +7,27 @@ from queue_tracker.database import Store
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_queue_ownership_supports_twitch_commands_and_site_requests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                twitch_user = store.create_user()
+                store.save_identity(twitch_user, "twitch", "123", "ChatViewer", "", "", "")
+                site_user = store.create_user()
+                store.save_identity(site_user, "google", "456", "Site Viewer", "", "", "")
+                store.record_request(site_user, "Site Song (Show)", "Site Viewer")
+                queue = [
+                    {"title": "Chat Song (Show)", "user": "chatviewer"},
+                    {"title": "Site Song (Show)", "user": "Site Viewer"},
+                    {"title": "Other Song (Show)", "user": "Someone Else"},
+                ]
+                store.reconcile_requests(queue)
+                self.assertEqual(store.owned_queue_indexes(twitch_user, queue), {0})
+                self.assertEqual(store.owned_queue_indexes(site_user, queue), {1})
+                self.assertEqual(store.owned_queue_indexes(None, queue), set())
+            finally:
+                store.close()
+
     def test_catalog_change_callback_runs_after_play_update(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))

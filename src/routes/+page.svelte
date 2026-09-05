@@ -1,7 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
-  import { getAccount, getCatalog, getQueue, requestSong, watchCatalog, watchQueue } from '$lib/api';
+  import { getAccount, getCatalog, getQueue, removeQueueItem, requestSong, watchCatalog, watchQueue } from '$lib/api';
   import { tagVisualStyle } from '$lib/color';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
@@ -14,6 +14,8 @@
   let selectedTags = $state<string[]>([]);
   let loading = $state(true);
   let requesting = $state('');
+  let removingQueueIndex = $state<number | null>(null);
+  let queueError = $state('');
   let message = $state('');
   let error = $state('');
   let clock = $state(Date.now());
@@ -57,6 +59,19 @@
     } catch (caught) {
       error = caught instanceof Error ? caught.message : 'Could not request this song';
     } finally { requesting = ''; }
+  }
+
+  async function removeFromQueue(index: number, title: string) {
+    if (!confirm(`Remove ${title} from the queue?`)) return;
+    removingQueueIndex = index;
+    queueError = '';
+    try {
+      await removeQueueItem(index);
+    } catch (caught) {
+      queueError = caught instanceof Error ? caught.message : 'Could not remove this request';
+    } finally {
+      removingQueueIndex = null;
+    }
   }
 
   onMount(() => {
@@ -114,14 +129,16 @@
     </span>
   </div>
   <div class="queue-viewport">
+    {#if queueError}<div class="notice error" role="alert">{queueError}</div>{/if}
     {#if queueState.queue.length === 0}
       <p class="queue-empty">The request queue is empty.</p>
     {:else}
       <ol class="queue-list">
         {#each queueState.queue as item, index (`${index}-${item.title}-${item.user}`)}
-          <li>
+          <li class:owned={item.can_remove}>
             <span class="queue-position">{index + 1}</span>
             <span class="queue-song"><strong>{item.title}</strong>{#if item.user}<small>Requested by {item.user}</small>{/if}</span>
+            {#if item.can_remove}<button class="button secondary small queue-remove" disabled={removingQueueIndex === index} onclick={() => removeFromQueue(index, item.title)}>{removingQueueIndex === index ? 'Removing…' : 'Remove'}</button>{/if}
           </li>
         {/each}
       </ol>
