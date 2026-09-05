@@ -4,6 +4,7 @@
   import twitchIcon from '$lib/assets/providers/twitch-glitch.svg';
   import discordIcon from '$lib/assets/providers/discord.svg';
   import googleIcon from '$lib/assets/providers/google-g.svg';
+  import profilePlaceholder from '$lib/assets/providers/profile-placeholder.svg';
   import type { Account } from '$lib/types';
 
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
@@ -18,10 +19,10 @@
 
   function identity(provider: string) { return me.identities.find((item) => item.provider === provider); }
   function connect(provider: string, mode: string) { location.href = authUrl(provider, mode); }
-  function useProviderIcon(event: Event, icon: string) {
+  function useProfilePlaceholder(event: Event) {
     const image = event.currentTarget as HTMLImageElement;
     image.onerror = null;
-    image.src = icon;
+    image.src = profilePlaceholder;
   }
 
   async function disconnect(provider: string, name: string) {
@@ -80,11 +81,10 @@
         <article class="panel account-card">
           <div class="provider">
             <img
-              class:account-avatar={Boolean(linked?.avatar_url)}
-              class="provider-mark"
-              src={linked?.avatar_url || provider.icon}
+              class="provider-mark account-avatar"
+              src={linked?.avatar_url || profilePlaceholder}
               alt={linked ? `${linked.display_name}'s ${provider.name} profile` : ''}
-              onerror={(event) => useProviderIcon(event, provider.icon)}
+              onerror={useProfilePlaceholder}
             />
             <div><h3>{provider.name}</h3><span class="muted">{linked?.display_name || 'Not linked'}</span></div>
             {#if linked}<span class="status-dot" title="Linked"></span>{/if}
