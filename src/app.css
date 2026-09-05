@@ -128,7 +128,7 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .account-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 32px; }
 .login-panel { display: flex; align-items: center; justify-content: flex-start; gap: 32px; }
 .login-panel .login-copy { flex: 0 1 550px; margin: 0; }
-.login-provider-grid { flex: 0 1 300px; width: min(100%, 300px); margin-inline: auto; grid-template-columns: minmax(0, 300px); justify-content: center; gap: .7rem; }
+.login-provider-grid { flex: 0 1 400px; width: min(100%, 400px); margin-inline: auto; grid-template-columns: minmax(0, 400px); justify-content: center; gap: .7rem; }
 .login-provider-button.button { width: 100%; min-height: 40px; padding: 9px 12px; gap: 10px; border-radius: 4px; background: #fff; font-family: 'Google Sans', Roboto, Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 20px; letter-spacing: normal; text-transform: none; }
 .login-provider-button.button .provider-mark { flex-basis: 20px; width: 20px; height: 20px; }
 .app-shell.dark .login-provider-button.button { background: #131314; }
