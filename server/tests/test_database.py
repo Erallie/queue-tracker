@@ -224,6 +224,93 @@ class DatabaseTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_creating_group_combines_member_tags_counts_and_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({
+                    "song_text": "# Songs\nFirst (Show)\nSecond (Show)",
+                    "last_played_history_limit": 2,
+                })
+                songs = {item["title"]: item for item in store.catalog()["songs"]}
+                store.save_tags([
+                    {"name": "New", "points": 0, "color": "#d33355"},
+                    {"name": "First tag", "points": 1, "color": "#111111"},
+                    {"name": "Second tag", "points": 2, "color": "#222222"},
+                ])
+                store.save_song_tags("First (Show)", ["First tag"])
+                store.save_song_tags("Second (Show)", ["Second tag"])
+                with patch("queue_tracker.database.now", return_value="2026-07-01T12:00:00+00:00"):
+                    store.adjust_play(songs["First"]["id"], 1)
+                with patch("queue_tracker.database.now", return_value="2026-08-01T12:00:00+00:00"):
+                    store.adjust_play(songs["Second"]["id"], 1)
+                with patch("queue_tracker.database.now", return_value="2026-09-01T12:00:00+00:00"):
+                    store.adjust_play(songs["First"]["id"], 1)
+
+                store.save_groups([{
+                    "display_name": "Combined (Show)",
+                    "members": ["First (Show)", "Second (Show)"],
+                }])
+
+                group = store.catalog()["songs"][0]
+                self.assertEqual(group["title"], "Combined")
+                self.assertEqual(group["tags"], ["First tag", "Second tag"])
+                self.assertEqual(group["play_count"], 3)
+                self.assertEqual(group["last_played"], "2026-09-01T12:00:00+00:00")
+                retained = store.db.execute(
+                    "SELECT COUNT(*) FROM play_events WHERE raw_title IN ('First (Show)','Second (Show)')"
+                ).fetchone()[0]
+                self.assertEqual(retained, 2)
+                member_dates = {
+                    row["last_played"]
+                    for row in store.db.execute(
+                        "SELECT last_played FROM songs WHERE raw_title IN ('First (Show)','Second (Show)')"
+                    )
+                }
+                self.assertEqual(member_dates, {"2026-09-01T12:00:00+00:00"})
+
+                store.save_song_tags_for_id(group["id"], ["First tag"])
+                grouped_assignments = {
+                    row["raw_title"]: {tag["tag_name"] for tag in store.db.execute(
+                        "SELECT tag_name FROM song_tags WHERE raw_title=?", (row["raw_title"],)
+                    )}
+                    for row in store.db.execute(
+                        "SELECT raw_title FROM songs WHERE raw_title IN ('First (Show)','Second (Show)')"
+                    )
+                }
+                self.assertEqual(grouped_assignments, {
+                    "First (Show)": {"First tag"},
+                    "Second (Show)": {"First tag"},
+                })
+            finally:
+                store.close()
+
+    def test_adding_new_to_one_group_member_updates_every_member_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({"song_text": "# Songs\nFirst (Show)\nSecond (Show)"})
+                store.save_groups([{
+                    "display_name": "Combined (Show)",
+                    "members": ["First (Show)", "Second (Show)"],
+                }])
+
+                store.save_settings({"song_text": "# Songs\nFirst (Show) [New]\nSecond (Show)"})
+
+                self.assertEqual(
+                    store.settings()["song_text"],
+                    "# Songs\nFirst (Show) [New]\nSecond (Show) [New]",
+                )
+                member_states = {
+                    bool(row["is_new"])
+                    for row in store.db.execute(
+                        "SELECT is_new FROM songs WHERE raw_title IN ('First (Show)','Second (Show)')"
+                    )
+                }
+                self.assertEqual(member_states, {True})
+            finally:
+                store.close()
+
     def test_new_tag_can_be_removed_from_a_song(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))

@@ -261,9 +261,10 @@ class Service:
         self.require_admin(request); body = await self.json(request); self.store.save_tags(body.get("tags", [])); return web.json_response({"ok": True})
 
     async def save_song_tags(self, request: web.Request) -> web.Response:
-        self.require_admin(request); body = await self.json(request); raw = self.store.request_title(request.match_info["song_id"])
-        if not raw: raise web.HTTPNotFound()
-        self.store.save_song_tags(raw, body.get("tags", [])); return web.json_response({"ok": True})
+        self.require_admin(request); body = await self.json(request)
+        if not self.store.save_song_tags_for_id(request.match_info["song_id"], body.get("tags", [])):
+            raise web.HTTPNotFound()
+        return web.json_response({"ok": True})
 
     async def adjust_play(self, request: web.Request) -> web.Response:
         self.require_admin(request)

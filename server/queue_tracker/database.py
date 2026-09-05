@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-from .catalog import parse_song_text, remove_new_marker, split_name
+from .catalog import add_new_marker, parse_song_text, remove_new_marker, split_name
 
 
 def now() -> str:
@@ -135,6 +135,9 @@ class Store:
         return {**DEFAULT_SETTINGS, **values}
 
     def save_settings(self, values: dict[str, Any]) -> None:
+        values = dict(values)
+        if "song_text" in values:
+            values["song_text"] = self._synchronize_group_new_markers(str(values["song_text"]))
         allowed = DEFAULT_SETTINGS.keys()
         for key in allowed:
             if key in values:
@@ -151,6 +154,37 @@ class Store:
             self._trim_all_play_history()
         self.db.commit()
         self._catalog_changed()
+
+    def _synchronize_group_new_markers(self, text: str) -> str:
+        proposed = {song.raw_title: song.is_new for song in parse_song_text(text)}
+        if not proposed:
+            return text
+        current = {
+            row["raw_title"]: bool(row["is_new"])
+            for row in self.db.execute("SELECT raw_title,is_new FROM songs")
+        }
+        add: set[str] = set()
+        remove: set[str] = set()
+        for group in self.db.execute("SELECT id FROM song_groups"):
+            members = [
+                row["raw_title"]
+                for row in self.db.execute(
+                    "SELECT raw_title FROM group_members WHERE group_id=? ORDER BY position",
+                    (group["id"],),
+                )
+                if row["raw_title"] in proposed
+            ]
+            if not members:
+                continue
+            newly_added = any(proposed[member] and not current.get(member, False) for member in members)
+            newly_removed = any(not proposed[member] and current.get(member, False) for member in members)
+            if newly_added:
+                add.update(members)
+            elif newly_removed:
+                remove.update(members)
+            elif any(proposed[member] for member in members):
+                add.update(members)
+        return add_new_marker(remove_new_marker(text, remove), add)
 
     def sync_songs(self, text: str) -> None:
         parsed = parse_song_text(text)
@@ -439,10 +473,25 @@ class Store:
         self.db.commit()
 
     def save_song_tags(self, raw_title: str, tags: list[str]) -> None:
-        self.db.execute("DELETE FROM song_tags WHERE raw_title=? AND tag_name!='New'", (raw_title,))
-        for tag in tags:
-            if tag != "New":
-                self.db.execute("INSERT OR IGNORE INTO song_tags VALUES(?,?)", (raw_title, tag))
+        self._save_song_tags([raw_title], tags)
+
+    def save_song_tags_for_id(self, song_id: str, tags: list[str]) -> bool:
+        raw_titles = self._titles_for_song_id(song_id)
+        if not raw_titles:
+            return False
+        self._save_song_tags(raw_titles, tags)
+        return True
+
+    def _save_song_tags(self, raw_titles: list[str], tags: list[str]) -> None:
+        valid_tags = {
+            row["name"]
+            for row in self.db.execute("SELECT name FROM tags WHERE name!='New'")
+        }
+        for raw_title in raw_titles:
+            self.db.execute("DELETE FROM song_tags WHERE raw_title=? AND tag_name!='New'", (raw_title,))
+            for tag in tags:
+                if tag in valid_tags:
+                    self.db.execute("INSERT OR IGNORE INTO song_tags VALUES(?,?)", (raw_title, tag))
         self.db.commit()
         self._catalog_changed()
 

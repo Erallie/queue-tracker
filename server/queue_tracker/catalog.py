@@ -55,3 +55,14 @@ def remove_new_marker(text: str, raw_titles: set[str]) -> str:
         clean = NEW_RE.sub("", line).strip()
         result.append(NEW_RE.sub("", line).rstrip() if clean in raw_titles else line)
     return "\n".join(result)
+
+
+def add_new_marker(text: str, raw_titles: set[str]) -> str:
+    result: list[str] = []
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        clean = NEW_RE.sub("", line).strip()
+        if clean in raw_titles and not NEW_RE.search(line):
+            result.append(f"{line.rstrip()} [New]")
+        else:
+            result.append(line)
+    return "\n".join(result)

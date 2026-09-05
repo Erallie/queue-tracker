@@ -328,6 +328,7 @@
           </div>
         {/each}
       </div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveTags(catalog.tags), 'Tag groups saved')}>Save tag groups</button></div>
       <h3 style="margin-top:2rem">Assign tags to songs</h3>
       <p class="muted">A grouped song applies the selected tags to the version used for requests.</p>
       <div class="toolbar">
@@ -351,7 +352,7 @@
           {/each}
         </tbody></table></div>
       {/if}
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveTags(catalog.tags); await Promise.all(catalog.songs.map((song) => saveSongTags(song.id, song.tags))); }, 'Tags and song assignments saved')}>Save tags</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => Promise.all(catalog.songs.map((song) => saveSongTags(song.id, song.tags))).then(() => undefined), 'Song tags saved')}>Save song tags</button></div>
     {:else if tab === 'tracker'}
       <div class="section-heading"><div><h2>All songs</h2><p class="muted">Every song in the current song list appears here, whether or not it is New. Queue removals update automatically; same-song groups share one combined count.</p></div></div>
       <div class="toolbar">
