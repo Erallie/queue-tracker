@@ -82,13 +82,14 @@
     setSort(field, nextDirection);
   }
 
-  function selectSortField(event: Event) {
-    setSort((event.currentTarget as HTMLSelectElement).value as SortField, sortDirection === 'none' ? 'ascending' : sortDirection);
-  }
-
-  function sortMarker(field: SortField): string {
-    if (sortField !== field || sortDirection === 'none') return '';
-    return sortDirection === 'ascending' ? '↑' : '↓';
+  function selectMobileSort(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (value === 'none') {
+      setSort(sortField, 'none');
+      return;
+    }
+    const [field, direction] = value.split(':') as [SortField, Exclude<SortDirection, 'none'>];
+    setSort(field, direction);
   }
 
   function toggleTag(tag: string) {
@@ -225,16 +226,18 @@
   {#if error}<div class="notice error" role="alert">{error}</div>{/if}
 
   <div class="mobile-sort-controls">
-    <label for="mobile-sort-field">Sort by</label>
-    <select id="mobile-sort-field" value={sortField} onchange={selectSortField}>
-      <option value="title">Title</option>
-      <option value="artist">Artist / Musical</option>
-      <option value="last_played">Last played</option>
-      <option value="play_count">Times played</option>
+    <label for="mobile-sort">Sort by</label>
+    <select id="mobile-sort" value={sortDirection === 'none' ? 'none' : `${sortField}:${sortDirection}`} onchange={selectMobileSort}>
+      <option value="none">None</option>
+      <option value="title:ascending">Title — Ascending</option>
+      <option value="title:descending">Title — Descending</option>
+      <option value="artist:ascending">Artist / Musical — Ascending</option>
+      <option value="artist:descending">Artist / Musical — Descending</option>
+      <option value="last_played:ascending">Last played — Ascending</option>
+      <option value="last_played:descending">Last played — Descending</option>
+      <option value="play_count:ascending">Times played — Ascending</option>
+      <option value="play_count:descending">Times played — Descending</option>
     </select>
-    <button class="button secondary sort-direction" type="button" onclick={() => cycleSort(sortField)} aria-label={`Current direction: ${sortDirection}. Change sort direction.`}>
-      {sortDirection === 'none' ? 'Not sorted' : sortDirection === 'ascending' ? 'Ascending ↑' : 'Descending ↓'}
-    </button>
   </div>
 
   {#if loading}
@@ -245,11 +248,11 @@
     <div class="table-wrap song-table-wrap">
       <table class="song-table">
         <thead><tr>
-          <th class="sortable" aria-sort={sortField === 'title' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('title')}>Title <span aria-hidden="true">{sortMarker('title')}</span></button></th>
-          <th class="sortable" aria-sort={sortField === 'artist' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('artist')}>Artist / Musical <span aria-hidden="true">{sortMarker('artist')}</span></button></th>
+          <th class="sortable" aria-sort={sortField === 'title' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('title')}>Title <span class="sort-carets" class:ascending={sortField === 'title' && sortDirection === 'ascending'} class:descending={sortField === 'title' && sortDirection === 'descending'} aria-hidden="true"><i class="caret-up"></i><i class="caret-down"></i></span></button></th>
+          <th class="sortable" aria-sort={sortField === 'artist' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('artist')}>Artist / Musical <span class="sort-carets" class:ascending={sortField === 'artist' && sortDirection === 'ascending'} class:descending={sortField === 'artist' && sortDirection === 'descending'} aria-hidden="true"><i class="caret-up"></i><i class="caret-down"></i></span></button></th>
           <th>Tags</th>
-          <th class="sortable" aria-sort={sortField === 'last_played' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('last_played')}>Last played <span aria-hidden="true">{sortMarker('last_played')}</span></button></th>
-          <th class="number sortable" aria-sort={sortField === 'play_count' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('play_count')}>Times played <span aria-hidden="true">{sortMarker('play_count')}</span></button></th>
+          <th class="sortable" aria-sort={sortField === 'last_played' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('last_played')}>Last played <span class="sort-carets" class:ascending={sortField === 'last_played' && sortDirection === 'ascending'} class:descending={sortField === 'last_played' && sortDirection === 'descending'} aria-hidden="true"><i class="caret-up"></i><i class="caret-down"></i></span></button></th>
+          <th class="number sortable" aria-sort={sortField === 'play_count' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('play_count')}>Times played <span class="sort-carets" class:ascending={sortField === 'play_count' && sortDirection === 'ascending'} class:descending={sortField === 'play_count' && sortDirection === 'descending'} aria-hidden="true"><i class="caret-up"></i><i class="caret-down"></i></span></button></th>
           <th><span class="sr-only">Request</span></th>
         </tr></thead>
         <tbody>

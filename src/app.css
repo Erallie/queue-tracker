@@ -91,7 +91,12 @@ table { width: 100%; border-collapse: collapse; color: rgb(var(--foreground)); b
 th { padding: .9rem 1rem; background: rgba(var(--foreground), .1); color: rgb(var(--foreground)); text-transform: uppercase; letter-spacing: .1em; font-size: .7rem; font-weight: 650; text-align: left; white-space: nowrap; }
 .sortable button { display: inline-flex; align-items: center; gap: .35rem; min-width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
 .sortable.number button { justify-content: center; }
-.sortable button span { display: inline-block; width: .8em; color: rgb(var(--accent)); font-size: 1.1em; line-height: 1; }
+.sort-carets { display: inline-grid; flex: 0 0 auto; width: 9px; height: 14px; align-content: center; gap: 2px; color: rgb(var(--muted)); }
+.sort-carets i { display: block; width: 6px; height: 6px; border-top: 1.5px solid currentColor; border-left: 1.5px solid currentColor; opacity: .72; }
+.sort-carets .caret-up { transform: translateY(1px) rotate(45deg); }
+.sort-carets .caret-down { transform: translateY(-1px) rotate(225deg); }
+.sort-carets.ascending .caret-up, .sort-carets.descending .caret-down { color: rgb(var(--accent)); opacity: 1; }
+.sort-carets.ascending .caret-down, .sort-carets.descending .caret-up { opacity: .2; }
 .sortable button:hover, .sortable button:focus-visible { color: rgb(var(--accent)); }
 .sortable button:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 4px; }
 .mobile-sort-controls { display: none; }
@@ -246,10 +251,9 @@ code { color: rgb(var(--accent)); }
   .tracker-table th:nth-child(4), .tracker-table td:nth-child(4), .tracker-table th:nth-child(5), .tracker-table td:nth-child(5) { display: table-cell; }
   td, th { padding: .75rem .65rem; }
   .request-cell .button { padding-inline: .6rem; }
-  .mobile-sort-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .5rem; margin: 0 0 1rem; }
+  .mobile-sort-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .5rem; margin: 0 0 1rem; }
   .mobile-sort-controls label { display: block; white-space: nowrap; }
   .mobile-sort-controls select { min-width: 0; padding: .62rem .7rem; }
-  .mobile-sort-controls .sort-direction { min-height: 38px; padding: .55rem .65rem; font-size: .66rem; white-space: nowrap; }
 
   .tracker-table { width: 100%; table-layout: fixed; }
   .tracker-table th:first-child { width: auto; }
