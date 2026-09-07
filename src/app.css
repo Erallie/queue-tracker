@@ -142,6 +142,12 @@ tbody tr:hover { background: rgba(var(--foreground), .06); }
 .notice { margin-bottom: 1rem; padding: .85rem 1rem; border-left: 4px solid rgb(var(--gold)); background: rgba(var(--surface), .9); color: rgb(var(--foreground)); }
 .notice.success { border-left-color: rgb(var(--green)); }
 .notice.error { border-left-color: rgb(var(--danger)); }
+.request-error-toast { position: fixed; z-index: 100; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: 1rem; width: min(420px, calc(100vw - 2rem)); margin: 0; border: 1px solid rgba(var(--line), .4); border-left: 4px solid rgb(var(--danger)); background: rgb(var(--surface-strong)); box-shadow: var(--shadow); }
+.request-error-toast > span { min-width: 0; line-height: 1.45; }
+.toast-dismiss { display: grid; flex: 0 0 auto; place-items: center; width: 30px; height: 30px; margin-left: auto; padding: 0; border: 1px solid rgba(var(--line), .42); border-radius: 50%; color: rgb(var(--foreground)); background: transparent; cursor: pointer; }
+.toast-dismiss:hover, .toast-dismiss:focus-visible { border-color: rgb(var(--accent)); color: rgb(var(--accent)); }
+.toast-dismiss:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
+.toast-dismiss svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.75; }
 .empty { padding: 3rem 1rem; text-align: center; color: rgb(var(--muted)); }
 .account-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 32px; }
 .login-panel { display: flex; align-items: center; justify-content: flex-start; gap: 32px; }
@@ -251,6 +257,7 @@ code { color: rgb(var(--accent)); }
   .tracker-table th:nth-child(4), .tracker-table td:nth-child(4), .tracker-table th:nth-child(5), .tracker-table td:nth-child(5) { display: table-cell; }
   td, th { padding: .75rem .65rem; }
   .request-cell .button { padding-inline: .6rem; }
+  .request-error-toast { right: .75rem; bottom: .75rem; width: calc(100vw - 1.5rem); }
   .mobile-sort-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .5rem; margin: 0 0 1rem; }
   .mobile-sort-controls label { display: block; white-space: nowrap; }
   .mobile-sort-controls select { min-width: 0; padding: .62rem .7rem; }

@@ -223,7 +223,6 @@
 
   {#if selectedTags.length > 1}<p class="muted">Showing songs that have all {selectedTags.length} selected tags.</p>{/if}
   {#if message}<div class="notice success" role="status">{message}</div>{/if}
-  {#if error}<div class="notice error" role="alert">{error}</div>{/if}
 
   <div class="mobile-sort-controls">
     <label for="mobile-sort">Sort by</label>
@@ -274,3 +273,12 @@
     </div>
   {/if}
 </section>
+
+{#if error}
+  <div class="notice error request-error-toast" role="alert">
+    <span>{error}</span>
+    <button class="toast-dismiss" type="button" aria-label="Dismiss notification" onclick={() => { error = ''; }}>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" /></svg>
+    </button>
+  </div>
+{/if}
