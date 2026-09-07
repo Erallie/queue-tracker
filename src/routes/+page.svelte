@@ -19,6 +19,11 @@
   let message = $state('');
   let error = $state('');
   let clock = $state(Date.now());
+  type SortField = 'title' | 'artist' | 'last_played' | 'play_count';
+  type SortDirection = 'none' | 'ascending' | 'descending';
+  let sortField = $state<SortField>('title');
+  let sortDirection = $state<SortDirection>('none');
+  let sortedSongIds = $state<string[]>([]);
 
   const tagColors = $derived(Object.fromEntries(catalog.tags.map((tag) => [tag.name, tag.color || '#ab212a'])));
   const filtered = $derived.by(() => {
@@ -29,6 +34,62 @@
       return textMatch && tagMatch;
     });
   });
+  const displayedSongs = $derived.by(() => {
+    if (sortDirection === 'none') return filtered;
+    const positions = new Map(sortedSongIds.map((id, index) => [id, index]));
+    return [...filtered].sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  });
+
+  function alphabeticalKey(value: string): string {
+    return value.trim().replace(/^(?:a|an|the)\s+/i, '');
+  }
+
+  function compareText(a: string, b: string): number {
+    const primary = alphabeticalKey(a).localeCompare(alphabeticalKey(b), undefined, { numeric: true, sensitivity: 'base' });
+    return primary || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  function compareSongs(a: Song, b: Song, field: SortField): number {
+    if (field === 'title') return compareText(a.title, b.title);
+    if (field === 'artist') return compareText(a.parenthetical, b.parenthetical) || compareText(a.title, b.title);
+    if (field === 'play_count') return a.play_count - b.play_count;
+    if (!a.last_played && !b.last_played) return 0;
+    if (!a.last_played) return -1;
+    if (!b.last_played) return 1;
+    return Date.parse(a.last_played) - Date.parse(b.last_played);
+  }
+
+  function setSort(field: SortField, direction: SortDirection) {
+    sortField = field;
+    sortDirection = direction;
+    if (direction === 'none') {
+      sortedSongIds = [];
+      return;
+    }
+    const originalPositions = new Map(catalog.songs.map((song, index) => [song.id, index]));
+    const multiplier = direction === 'ascending' ? 1 : -1;
+    sortedSongIds = [...catalog.songs]
+      .sort((a, b) => (compareSongs(a, b, field) * multiplier) || ((originalPositions.get(a.id) ?? 0) - (originalPositions.get(b.id) ?? 0)))
+      .map((song) => song.id);
+  }
+
+  function cycleSort(field: SortField) {
+    const nextDirection: SortDirection = sortField !== field || sortDirection === 'none'
+      ? 'ascending'
+      : sortDirection === 'ascending'
+        ? 'descending'
+        : 'none';
+    setSort(field, nextDirection);
+  }
+
+  function selectSortField(event: Event) {
+    setSort((event.currentTarget as HTMLSelectElement).value as SortField, sortDirection === 'none' ? 'ascending' : sortDirection);
+  }
+
+  function sortMarker(field: SortField): string {
+    if (sortField !== field || sortDirection === 'none') return '';
+    return sortDirection === 'ascending' ? '↑' : '↓';
+  }
 
   function toggleTag(tag: string) {
     selectedTags = selectedTags.includes(tag) ? selectedTags.filter((item) => item !== tag) : [...selectedTags, tag];
@@ -163,16 +224,36 @@
   {#if message}<div class="notice success" role="status">{message}</div>{/if}
   {#if error}<div class="notice error" role="alert">{error}</div>{/if}
 
+  <div class="mobile-sort-controls">
+    <label for="mobile-sort-field">Sort by</label>
+    <select id="mobile-sort-field" value={sortField} onchange={selectSortField}>
+      <option value="title">Title</option>
+      <option value="artist">Artist / Musical</option>
+      <option value="last_played">Last played</option>
+      <option value="play_count">Times played</option>
+    </select>
+    <button class="button secondary sort-direction" type="button" onclick={() => cycleSort(sortField)} aria-label={`Current direction: ${sortDirection}. Change sort direction.`}>
+      {sortDirection === 'none' ? 'Not sorted' : sortDirection === 'ascending' ? 'Ascending ↑' : 'Descending ↓'}
+    </button>
+  </div>
+
   {#if loading}
     <div class="empty">Opening the song book…</div>
-  {:else if filtered.length === 0}
+  {:else if displayedSongs.length === 0}
     <div class="empty"><strong>No songs match those filters.</strong><br />Try a different search or remove a tag.</div>
   {:else}
     <div class="table-wrap song-table-wrap">
       <table class="song-table">
-        <thead><tr><th>Title</th><th>Artist / Musical</th><th>Tags</th><th>Last played</th><th class="number">Times played</th><th><span class="sr-only">Request</span></th></tr></thead>
+        <thead><tr>
+          <th class="sortable" aria-sort={sortField === 'title' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('title')}>Title <span aria-hidden="true">{sortMarker('title')}</span></button></th>
+          <th class="sortable" aria-sort={sortField === 'artist' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('artist')}>Artist / Musical <span aria-hidden="true">{sortMarker('artist')}</span></button></th>
+          <th>Tags</th>
+          <th class="sortable" aria-sort={sortField === 'last_played' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('last_played')}>Last played <span aria-hidden="true">{sortMarker('last_played')}</span></button></th>
+          <th class="number sortable" aria-sort={sortField === 'play_count' ? sortDirection : 'none'}><button type="button" onclick={() => cycleSort('play_count')}>Times played <span aria-hidden="true">{sortMarker('play_count')}</span></button></th>
+          <th><span class="sr-only">Request</span></th>
+        </tr></thead>
         <tbody>
-          {#each filtered as song (song.id)}
+          {#each displayedSongs as song (song.id)}
             <tr>
               <td class="song-name-cell">
                 <div class="song-title">{song.title}</div>
