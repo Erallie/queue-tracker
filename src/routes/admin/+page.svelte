@@ -250,7 +250,7 @@
     {#if tab === 'songs'}
       <div class="section-heading"><div><h2>Editable song list</h2><p class="muted">Keep the same heading and one-song-per-line format. Adding or removing <code>[New]</code> updates tracking immediately.</p></div></div>
       <MarkdownEditor bind:value={settings.song_text} />
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveSettings(settings); ({ settings, groups, catalog } = await getAdmin()); }, 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button></div>
       <nav class="editor-destinations" aria-label="Places to update the song list">
         <span class="muted">Update the published song list:</span>
         <a class="external-inline-link" href="https://www.twitch.tv/erallie/about" target="_blank" rel="noopener noreferrer">
