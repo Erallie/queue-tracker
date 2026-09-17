@@ -6,7 +6,7 @@
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
   import MarkdownEditor from '$lib/MarkdownEditor.svelte';
-  import type { Account, Catalog, Settings, SongGroup } from '$lib/types';
+  import type { Account, Catalog, Settings, Song, SongGroup } from '$lib/types';
 
   let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
@@ -22,6 +22,7 @@
   let tagFilters = $state<string[]>([]);
   let trackerQuery = $state('');
   let trackerTags = $state<string[]>([]);
+  let trackerOrderIds = $state<string[]>([]);
   let removingNew = $state('');
   let clock = $state(Date.now());
 
@@ -77,17 +78,27 @@
       return textMatch && tagMatch;
     });
   });
+  function compareTrackerSongs(a: Song, b: Song) {
+    if (!a.last_played && !b.last_played) return 0;
+    if (!a.last_played) return 1;
+    if (!b.last_played) return -1;
+    return Date.parse(b.last_played) - Date.parse(a.last_played);
+  }
+
   const trackedSongs = $derived.by(() => {
     const needle = normalizeSearch(trackerQuery.trim());
+    const positions = new Map(trackerOrderIds.map((id, index) => [id, index]));
     return catalog.songs.filter((song) => {
       const textMatch = !needle || normalizeSearch(`${song.title} ${song.parenthetical}`).includes(needle);
       const tagMatch = trackerTags.every((tag) => song.tags.includes(tag));
       return textMatch && tagMatch;
     }).sort((a, b) => {
-      if (!a.last_played && !b.last_played) return 0;
-      if (!a.last_played) return 1;
-      if (!b.last_played) return -1;
-      return Date.parse(b.last_played) - Date.parse(a.last_played);
+      const aPosition = positions.get(a.id);
+      const bPosition = positions.get(b.id);
+      if (aPosition !== undefined && bPosition !== undefined) return aPosition - bPosition;
+      if (aPosition !== undefined) return -1;
+      if (bPosition !== undefined) return 1;
+      return 0;
     });
   });
 
@@ -212,6 +223,7 @@
     if (me.is_admin) {
       try {
         ({ settings, groups, catalog } = await getAdmin());
+        trackerOrderIds = [...catalog.songs].sort(compareTrackerSongs).map((song) => song.id);
       } catch (caught) {
         error = caught instanceof Error ? caught.message : 'Could not open the owner dashboard';
       }
