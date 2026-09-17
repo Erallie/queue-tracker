@@ -262,11 +262,19 @@ class Service:
 
     async def request_song(self, request: web.Request) -> web.Response:
         user_id = self.require_user(request)
-        title = self.store.request_title(request.match_info["song_id"])
+        song_id = request.match_info["song_id"]
+        title = self.store.request_title(song_id)
         if not title: raise web.HTTPNotFound(text='{"error":"Song not found"}', content_type="application/json")
+        cooldown_remaining = self.store.request_cooldown_remaining_minutes(song_id)
+        if cooldown_remaining is not None:
+            unit = "minute" if cooldown_remaining == 1 else "minutes"
+            return web.json_response(
+                {"error": f"This song was performed too recently. It can be requested again in {cooldown_remaining} {unit}."},
+                status=429,
+            )
         name = self.request_name(user_id)
         try:
-            await self.queue.request(title, name, self.store.group_request_titles(request.match_info["song_id"]))
+            await self.queue.request(title, name, self.store.group_request_titles(song_id))
         except SongAlreadyQueuedError as error:
             return web.json_response({"error": str(error)}, status=409)
         except RuntimeError as error:

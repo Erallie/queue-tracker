@@ -9,6 +9,7 @@ A lightweight Svelte/TypeScript song-request site with a Python connector for th
 - Manually configured same-song groups. Only the group display name appears; a request sends its first member.
 - Twitch, Discord, and Google sign-in with account linking. Request names prefer Twitch, then Discord, then Google. Removing the final identity deletes the account.
 - Play totals and last-played dates for every song.
+- Configurable request cooldown that temporarily blocks songs performed within the chosen number of minutes.
 - Owner dashboard for the source song text, same-song groups, tags and ranking points, manual play corrections, and queue settings.
 - Hourly New-song eligibility checks. A song graduates only after both its play threshold and minimum age are reached.
 - No generated `# New Songs` section is added to copied or editable text.

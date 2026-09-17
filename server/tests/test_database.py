@@ -369,6 +369,46 @@ class DatabaseTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_request_cooldown_blocks_recently_played_song_until_expiry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({
+                    "song_text": "# Songs\nFirst (Show)",
+                    "request_cooldown_minutes": 60,
+                })
+                song = store.catalog()["songs"][0]
+                with patch("queue_tracker.database.now", return_value="2026-09-17T12:00:00+00:00"):
+                    store.adjust_play(song["id"], 1)
+                with patch("queue_tracker.database.now", return_value="2026-09-17T12:30:01+00:00"):
+                    self.assertEqual(store.request_cooldown_remaining_minutes(song["id"]), 30)
+                with patch("queue_tracker.database.now", return_value="2026-09-17T13:00:00+00:00"):
+                    self.assertIsNone(store.request_cooldown_remaining_minutes(song["id"]))
+            finally:
+                store.close()
+
+    def test_request_cooldown_uses_latest_play_for_entire_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "queue-tracker.sqlite"))
+            try:
+                store.save_settings({
+                    "song_text": "# Songs\nFirst (Show)\nSecond (Show)",
+                    "request_cooldown_minutes": 60,
+                })
+                store.save_groups([{
+                    "display_name": "Combined (Show)",
+                    "members": ["First (Show)", "Second (Show)"],
+                }])
+                with patch("queue_tracker.database.now", return_value="2026-09-17T12:00:00+00:00"):
+                    store.record_play("Second (Show)")
+                group = store.catalog()["songs"][0]
+                with patch("queue_tracker.database.now", return_value="2026-09-17T12:45:00+00:00"):
+                    self.assertEqual(store.request_cooldown_remaining_minutes(group["id"]), 15)
+                store.save_settings({"request_cooldown_minutes": 0})
+                self.assertIsNone(store.request_cooldown_remaining_minutes(group["id"]))
+            finally:
+                store.close()
+
     def test_new_tag_can_be_removed_from_a_song(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "queue-tracker.sqlite"))

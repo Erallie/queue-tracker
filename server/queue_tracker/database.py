@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -34,6 +35,7 @@ DEFAULT_SETTINGS = {
     "new_min_days": 14,
     "recently_graduated_days": 7,
     "last_played_history_limit": 10,
+    "request_cooldown_minutes": 0,
     "default_artist": "Erallie",
     "queue_websocket_url": "wss://sikorsky.mustardmine.com/ws",
     "queue_group": "#275206561",
@@ -147,6 +149,8 @@ class Store:
             if key in values:
                 if key == "last_played_history_limit":
                     value = max(1, int(values[key]))
+                elif key == "request_cooldown_minutes":
+                    value = max(0, int(values[key]))
                 elif key == "default_artist":
                     value = str(values[key]).strip() or DEFAULT_SETTINGS["default_artist"]
                 else:
@@ -325,6 +329,32 @@ class Store:
         else:
             row = self.db.execute("SELECT raw_title FROM songs WHERE id=? AND active=1", (song_id,)).fetchone()
         return row[0] if row else None
+
+    def request_cooldown_remaining_minutes(self, song_id: str) -> int | None:
+        cooldown_minutes = max(0, int(self.settings()["request_cooldown_minutes"]))
+        if cooldown_minutes == 0:
+            return None
+        titles = self._titles_for_song_id(song_id)
+        if not titles:
+            return None
+        placeholders = ",".join("?" for _ in titles)
+        row = self.db.execute(
+            f"SELECT MAX(last_played) AS last_played FROM songs WHERE raw_title IN ({placeholders})",
+            tuple(titles),
+        ).fetchone()
+        if not row or not row["last_played"]:
+            return None
+        try:
+            played_at = datetime.fromisoformat(str(row["last_played"]).replace("Z", "+00:00"))
+            current_time = datetime.fromisoformat(now().replace("Z", "+00:00"))
+            if played_at.tzinfo is None:
+                played_at = played_at.replace(tzinfo=UTC)
+            if current_time.tzinfo is None:
+                current_time = current_time.replace(tzinfo=UTC)
+        except ValueError:
+            return None
+        remaining_seconds = cooldown_minutes * 60 - (current_time - played_at).total_seconds()
+        return max(1, math.ceil(remaining_seconds / 60)) if remaining_seconds > 0 else None
 
     def group_request_titles(self, song_id: str) -> list[str]:
         if not song_id.startswith("group:"):
