@@ -123,6 +123,12 @@ class QueueBridge:
             self.refresh()
             return removed
 
+    async def move(self, entry_id: str, direction: int) -> bool:
+        async with self._lock:
+            moved = self.store.move_queue_entry(entry_id, direction)
+            self.refresh()
+            return moved
+
     @staticmethod
     def _queue_title_key(title: str) -> str:
         return " ".join(title.casefold().split())

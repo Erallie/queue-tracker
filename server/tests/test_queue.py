@@ -70,6 +70,21 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(updated["play_count"], 1)
         self.assertEqual(self.queue.current_queue, [])
 
+    async def test_queue_items_can_be_moved_and_order_is_persisted(self):
+        for title in ("First (Show)", "Second (Show)", "Third (Show)"):
+            await self.queue.request(title, "Viewer")
+        third_id = self.queue.current_queue[2]["id"]
+        self.assertTrue(await self.queue.move(third_id, -1))
+        self.assertEqual(
+            [entry["title"] for entry in self.queue.current_queue],
+            ["First (Show)", "Third (Show)", "Second (Show)"],
+        )
+        self.assertEqual(
+            [entry["title"] for entry in self.store.queue_entries()],
+            ["First (Show)", "Third (Show)", "Second (Show)"],
+        )
+        self.assertFalse(await self.queue.move(self.queue.current_queue[0]["id"], -1))
+
 
 if __name__ == "__main__":
     unittest.main()

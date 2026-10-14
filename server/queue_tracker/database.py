@@ -95,7 +95,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS queue_entries(
           id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
           requester_provider TEXT NOT NULL DEFAULT '', requester_provider_id TEXT NOT NULL DEFAULT '',
-          raw_title TEXT NOT NULL, request_name TEXT NOT NULL, requested_at TEXT NOT NULL);
+          raw_title TEXT NOT NULL, request_name TEXT NOT NULL, requested_at TEXT NOT NULL,
+          position INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS play_events(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           raw_title TEXT NOT NULL REFERENCES songs(raw_title) ON DELETE CASCADE,
@@ -112,6 +113,10 @@ class Store:
             existing_tags = self.db.execute("SELECT name FROM tags ORDER BY name='New' DESC, name").fetchall()
             for position, tag in enumerate(existing_tags):
                 self.db.execute("UPDATE tags SET position=? WHERE name=?", (position, tag["name"]))
+        queue_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(queue_entries)")}
+        if "position" not in queue_columns:
+            self.db.execute("ALTER TABLE queue_entries ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+        self._normalize_queue_positions()
         for key, value in DEFAULT_SETTINGS.items():
             self.db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", (key, json.dumps(value)))
         self.db.execute("INSERT OR IGNORE INTO tags(name,points,color,position) VALUES('New',0,'#d33355',0)")
@@ -535,9 +540,19 @@ class Store:
                 "requester_provider_id": row["requester_provider_id"],
             }
             for row in self.db.execute(
-                "SELECT * FROM queue_entries ORDER BY requested_at,id"
+                "SELECT * FROM queue_entries ORDER BY position,requested_at,id"
             )
         ]
+
+    def _normalize_queue_positions(self) -> None:
+        rows = self.db.execute(
+            "SELECT id FROM queue_entries ORDER BY position,requested_at,id"
+        ).fetchall()
+        for position, row in enumerate(rows):
+            self.db.execute(
+                "UPDATE queue_entries SET position=? WHERE id=?",
+                (position, row["id"]),
+            )
 
     def enqueue(
         self,
@@ -548,10 +563,15 @@ class Store:
         requester_provider_id: str = "",
     ) -> str:
         entry_id = str(uuid.uuid4())
+        position = int(
+            self.db.execute(
+                "SELECT COALESCE(MAX(position),-1)+1 FROM queue_entries"
+            ).fetchone()[0]
+        )
         self.db.execute(
             """INSERT INTO queue_entries(
-                 id,user_id,requester_provider,requester_provider_id,raw_title,request_name,requested_at
-               ) VALUES(?,?,?,?,?,?,?)""",
+                 id,user_id,requester_provider,requester_provider_id,raw_title,request_name,requested_at,position
+               ) VALUES(?,?,?,?,?,?,?,?)""",
             (
                 entry_id,
                 user_id,
@@ -560,6 +580,7 @@ class Store:
                 raw_title,
                 request_name,
                 now(),
+                position,
             ),
         )
         self.db.commit()
@@ -570,8 +591,32 @@ class Store:
         if not row:
             return None
         self.db.execute("DELETE FROM queue_entries WHERE id=?", (entry_id,))
+        self._normalize_queue_positions()
         self.db.commit()
         return dict(row)
+
+    def move_queue_entry(self, entry_id: str, direction: int) -> bool:
+        if direction not in {-1, 1}:
+            return False
+        self._normalize_queue_positions()
+        rows = self.db.execute(
+            "SELECT id,position FROM queue_entries ORDER BY position,requested_at,id"
+        ).fetchall()
+        index = next((index for index, row in enumerate(rows) if row["id"] == entry_id), -1)
+        target_index = index + direction
+        if index < 0 or target_index < 0 or target_index >= len(rows):
+            return False
+        current, target = rows[index], rows[target_index]
+        self.db.execute(
+            "UPDATE queue_entries SET position=? WHERE id=?",
+            (target["position"], current["id"]),
+        )
+        self.db.execute(
+            "UPDATE queue_entries SET position=? WHERE id=?",
+            (current["position"], target["id"]),
+        )
+        self.db.commit()
+        return True
 
     def set_queue_open(self, open_: bool) -> None:
         self.set_queue_state(open_, 0)

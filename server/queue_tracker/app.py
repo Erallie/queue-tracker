@@ -67,6 +67,7 @@ class Service:
         app.router.add_put("/api/admin/queue/status", self.set_queue_status)
         app.router.add_delete("/api/admin/queue/{entry_id}", self.admin_remove_queue_item)
         app.router.add_post("/api/admin/queue/{entry_id}/complete", self.complete_queue_item)
+        app.router.add_post("/api/admin/queue/{entry_id}/move", self.move_queue_item)
         app.router.add_put("/api/admin/settings", self.save_settings)
         app.router.add_put("/api/admin/groups", self.save_groups)
         app.router.add_put("/api/admin/tags", self.save_tags)
@@ -249,23 +250,24 @@ html,body{margin:0;min-height:100%;background:#0e0e10}body{padding:8px 8px 74px;
 #message{position:fixed;top:10px;right:10px;z-index:3;max-width:min(420px,calc(100vw - 20px));padding:10px 14px;background:#3a1f2b;color:#ff8da1;border:1px solid #7b3048;display:none}
 table{width:100%;border-collapse:collapse}th,td{padding:8px 6px;border-bottom:1px solid #2a2a2a;text-align:left}th{background:#1f1f23;font-weight:700}tbody tr:nth-child(even){background:#18181b}
 .position{width:8%}.song{width:18%}.origin{width:37%}.requester{width:22%}.actions{width:15%;white-space:nowrap;text-align:right}
-.action{border:0;border-radius:6px;padding:5px 9px;margin-left:5px;color:#fff;font-weight:700;cursor:pointer}.cancel{background:#3a1f2b;color:#ff6b86}.complete{background:#196c45}.action:disabled,#bottombar button:disabled{opacity:.5;cursor:wait}
+.action-group{display:flex;justify-content:flex-end;gap:5px}.action{border:0;border-radius:6px;width:32px;height:32px;padding:6px;color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.action svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round}.move{background:#2b2b31;color:#efeff1}.cancel{background:#3a1f2b;color:#ff6b86}.complete{background:#196c45}.action:disabled,#bottombar button:disabled{opacity:.35;cursor:not-allowed}
 .placeholder td{height:34px;color:#777}
 #bottombar{position:fixed;z-index:2;bottom:12px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:12px;color:#efeff1}
 #bottombar button{font-weight:700;border:0;border-radius:8px;padding:9px 20px;cursor:pointer;color:#fff;background:#ad2626}#bottombar button.open{background:#1d7a4d}
 #closeafter{width:58px;height:26px;background:#fff;color:#111;border:1px solid #aaa;padding:2px 5px}
-@media(max-width:700px){.origin{width:25%}.requester{width:20%}.action{display:block;width:100%;margin:3px 0}.actions{white-space:normal}}
+@media(max-width:700px){.origin{width:25%}.requester{width:20%}.actions{white-space:normal}.action{width:30px;height:30px;padding:5px}.action-group{gap:3px}}
 </style></head><body><div id="message" role="alert"></div><main></main><div id="bottombar"></div>
 <script>
 const main=document.querySelector('main'),bar=document.querySelector('#bottombar'),message=document.querySelector('#message');let lastData={queue:[],queue_open:null,close_after:0};
 function flash(text){message.textContent=text;message.style.display='block';clearTimeout(flash.timer);flash.timer=setTimeout(()=>message.style.display='none',5000)}
 async function api(path,options={}){const response=await fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...options});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Owner sign-in is required for that control.');return body}
 async function act(button,action){button.disabled=true;try{await action()}catch(error){flash(error.message)}finally{button.disabled=false}}
-function actionButton(label,className,handler){const button=document.createElement('button');button.type='button';button.className='action '+className;button.textContent=label;button.onclick=()=>act(button,handler);return button}
+const icons={up:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>',down:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',check:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',cancel:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>'};
+function actionButton(label,className,icon,handler,disabled=false){const button=document.createElement('button');button.type='button';button.className='action '+className;button.setAttribute('aria-label',label);button.title=label;button.innerHTML=icon;button.disabled=disabled;button.onclick=()=>act(button,handler);return button}
 function render(data){lastData=data;const table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody'),header=document.createElement('tr');
 for(const [label,className] of [['#','position'],['Song','song'],['Musical/Artist','origin'],['Requestor','requester'],['','actions']]){const th=document.createElement('th');th.textContent=label;th.className=className;header.append(th)}head.append(header);table.append(head);
 if(!data.queue.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=5;cell.textContent='No requests currently.';row.append(cell);body.append(row)}
-data.queue.forEach((item,index)=>{const row=document.createElement('tr');for(const value of [index+1,item.song||item.title,item.origin||'',item.user]){const cell=document.createElement('td');cell.textContent=value;row.append(cell)}const controls=document.createElement('td');controls.className='actions';controls.append(actionButton('Complete','complete',()=>api('/api/admin/queue/'+encodeURIComponent(item.id)+'/complete',{method:'POST'})),actionButton('Cancel','cancel',()=>api('/api/admin/queue/'+encodeURIComponent(item.id),{method:'DELETE'})));row.append(controls);body.append(row)});
+data.queue.forEach((item,index)=>{const row=document.createElement('tr');for(const value of [index+1,item.song||item.title,item.origin||'',item.user]){const cell=document.createElement('td');cell.textContent=value;row.append(cell)}const controls=document.createElement('td'),group=document.createElement('div'),url='/api/admin/queue/'+encodeURIComponent(item.id);controls.className='actions';group.className='action-group';group.append(actionButton('Move request up','move',icons.up,()=>api(url+'/move',{method:'POST',body:JSON.stringify({direction:-1})}),index===0),actionButton('Move request down','move',icons.down,()=>api(url+'/move',{method:'POST',body:JSON.stringify({direction:1})}),index===data.queue.length-1),actionButton('Complete request','complete',icons.check,()=>api(url+'/complete',{method:'POST'})),actionButton('Cancel request','cancel',icons.cancel,()=>api(url,{method:'DELETE'})));controls.append(group);row.append(controls);body.append(row)});
 for(let index=0;index<(data.close_after||0);index++){const row=document.createElement('tr'),number=document.createElement('td'),blank=document.createElement('td');row.className='placeholder';number.textContent=data.queue.length+index+1;blank.colSpan=4;blank.innerHTML='&nbsp;';row.append(number,blank);body.append(row)}table.append(body);main.replaceChildren(table);renderBar(data)}
 function renderBar(data){bar.replaceChildren();if(data.queue_open){const button=document.createElement('button'),label=document.createElement('label'),input=document.createElement('input');button.textContent='Close Queue';input.id='closeafter';input.type='number';input.min='0';input.value=data.close_after||0;label.append('after ',input);button.onclick=()=>act(button,()=>api('/api/admin/queue/status',{method:'PUT',body:JSON.stringify({open:input.valueAsNumber>0,close_after:Math.max(0,input.valueAsNumber||0)})}));bar.append(button,label)}else{const button=document.createElement('button');button.textContent='Open Queue';button.className='open';button.onclick=()=>act(button,()=>api('/api/admin/queue/status',{method:'PUT',body:JSON.stringify({open:true})}));bar.append(button)}}
 fetch('/api/queue',{credentials:'include'}).then(r=>r.json()).then(render);const events=new EventSource('/api/queue/events',{withCredentials:true});events.addEventListener('queue',event=>render(JSON.parse(event.data)));
@@ -406,6 +408,16 @@ fetch('/api/queue',{credentials:'include'}).then(r=>r.json()).then(render);const
         if not completed:
             raise web.HTTPNotFound(text='{"error":"That request is no longer in the queue"}', content_type="application/json")
         return web.json_response({"completed": True})
+
+    async def move_queue_item(self, request: web.Request) -> web.Response:
+        self.require_admin(request)
+        body = await self.json(request)
+        direction = int(body.get("direction", 0))
+        if direction not in {-1, 1}:
+            raise web.HTTPBadRequest(text='{"error":"Direction must be -1 or 1"}', content_type="application/json")
+        if not await self.queue.move(request.match_info["entry_id"], direction):
+            raise web.HTTPConflict(text='{"error":"That request cannot be moved farther in that direction"}', content_type="application/json")
+        return web.json_response({"moved": True})
 
     async def save_settings(self, request: web.Request) -> web.Response:
         self.require_admin(request); self.store.save_settings(await self.json(request)); return web.json_response({"ok": True})
