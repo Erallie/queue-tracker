@@ -249,13 +249,13 @@ class Service:
 html,body{margin:0;min-height:100%;background:#0e0e10}body{padding:8px 8px 74px;font-size:14px}
 #message{position:fixed;top:10px;right:10px;z-index:3;max-width:min(420px,calc(100vw - 20px));padding:10px 14px;background:#3a1f2b;color:#ff8da1;border:1px solid #7b3048;display:none}
 table{width:100%;border-collapse:collapse}th,td{padding:8px 6px;border-bottom:1px solid #2a2a2a;text-align:left}th{background:#1f1f23;font-weight:700}tbody tr:nth-child(even){background:#18181b}
-.position{width:8%}.song{width:18%}.origin{width:37%}.requester{width:22%}.actions{width:15%;padding-left:2px;padding-right:2px;white-space:nowrap;text-align:right}
-.action-group{display:grid;grid-template-columns:repeat(2,32px);justify-content:end;gap:2px}.action{border:0;border-radius:6px;width:32px;height:32px;padding:6px;color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.action svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round}.move{background:#2b2b31;color:#efeff1}.cancel{background:#3a1f2b;color:#ff6b86}.complete{background:#196c45}.action:disabled,#bottombar button:disabled{opacity:.35;cursor:not-allowed}
+.position{width:8%}.song{width:18%}.origin{width:37%}.requester{width:22%}.actions{width:15%;white-space:nowrap;text-align:right}
+.action-group{display:grid;grid-template-columns:repeat(2,27px);justify-content:end;gap:5px}.action{border:0;border-radius:6px;width:27px;height:27px;padding:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.action svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round}.move{background:#2b2b31;color:#efeff1}.cancel{background:#3a1f2b;color:#ff6b86}.complete{background:#196c45}.action:disabled,#bottombar button:disabled{opacity:.35;cursor:not-allowed}
 .placeholder td{height:34px;color:#777}
 #bottombar{position:fixed;z-index:2;bottom:12px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:12px;color:#efeff1}
 #bottombar button{font-weight:700;border:0;border-radius:8px;padding:9px 20px;cursor:pointer;color:#fff;background:#ad2626}#bottombar button.open{background:#1d7a4d}
 #closeafter{width:58px;height:26px;background:#fff;color:#111;border:1px solid #aaa;padding:2px 5px}
-@media(max-width:700px){.origin{width:25%}.requester{width:20%}.actions{white-space:normal}.action{width:30px;height:30px;padding:5px}.action-group{grid-template-columns:repeat(2,30px);gap:1px}}
+@media(max-width:700px){.origin{width:25%}.requester{width:20%}.actions{white-space:normal}.action-group{gap:3px}}
 </style></head><body><div id="message" role="alert"></div><main></main><div id="bottombar"></div>
 <script>
 const main=document.querySelector('main'),bar=document.querySelector('#bottombar'),message=document.querySelector('#message');let lastData={queue:[],queue_open:null,close_after:0};
