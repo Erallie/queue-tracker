@@ -28,6 +28,7 @@ export type Catalog = {
 };
 
 export type QueueItem = {
+  id: string;
   title: string;
   user: string;
   can_remove?: boolean;
@@ -47,8 +48,10 @@ export type Settings = {
   last_played_history_limit: number;
   request_cooldown_minutes: number;
   default_artist: string;
-  queue_websocket_url: string;
-  queue_group: string;
+  queue_open: boolean;
+  twitch_chat_enabled: boolean;
+  twitch_request_command: string;
+  twitch_remove_command: string;
 };
 
 export type SongGroup = {

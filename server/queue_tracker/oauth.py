@@ -16,7 +16,7 @@ class Provider:
 
 
 PROVIDERS = {
-    "twitch": Provider("https://id.twitch.tv/oauth2/authorize", "https://id.twitch.tv/oauth2/token", "https://api.twitch.tv/helix/users", "user:read:email"),
+    "twitch": Provider("https://id.twitch.tv/oauth2/authorize", "https://id.twitch.tv/oauth2/token", "https://api.twitch.tv/helix/users", "user:read:email user:read:chat"),
     "discord": Provider("https://discord.com/oauth2/authorize", "https://discord.com/api/v10/oauth2/token", "https://discord.com/api/v10/users/@me", "identify email"),
     "google": Provider("https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", "https://openidconnect.googleapis.com/v1/userinfo", "openid profile email"),
 }
@@ -36,6 +36,23 @@ async def exchange(session: aiohttp.ClientSession, provider: str, client_id: str
         body = await response.json()
         if response.status >= 400: raise RuntimeError(body.get("error_description") or body.get("message") or "OAuth token exchange failed")
         return {"access_token": str(body.get("access_token") or ""), "refresh_token": str(body.get("refresh_token") or "")}
+
+
+async def refresh_twitch_token(session: aiohttp.ClientSession, client_id: str, client_secret: str, refresh_token: str) -> dict[str, str]:
+    form = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+    async with session.post(PROVIDERS["twitch"].token, data=form) as response:
+        body = await response.json()
+        if response.status >= 400:
+            raise RuntimeError(body.get("message") or "Twitch token refresh failed")
+        return {
+            "access_token": str(body.get("access_token") or ""),
+            "refresh_token": str(body.get("refresh_token") or refresh_token),
+        }
 
 
 async def profile(session: aiohttp.ClientSession, provider: str, access_token: str, client_id: str) -> dict[str, str]:

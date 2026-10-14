@@ -1,18 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ExternalArrow from '$lib/ExternalArrow.svelte';
-  import { adjustPlay, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags } from '$lib/api';
+  import { adminRemoveQueueItem, adjustPlay, completeQueueItem, getAdmin, getAccount, removeNewTag, saveGroups, saveSettings, saveSongTags, saveTags, setQueueOpen, watchQueue } from '$lib/api';
   import { tagVisualStyle } from '$lib/color';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
   import MarkdownEditor from '$lib/MarkdownEditor.svelte';
-  import type { Account, Catalog, Settings, Song, SongGroup } from '$lib/types';
+  import type { Account, Catalog, QueueItem, Settings, Song, SongGroup } from '$lib/types';
 
-  let tab = $state<'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('songs');
+  let tab = $state<'queue' | 'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('queue');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, default_artist: 'Erallie', queue_websocket_url: '', queue_group: '' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, default_artist: 'Erallie', queue_open: false, twitch_chat_enabled: true, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
+  let queue = $state<QueueItem[]>([]);
   let loading = $state(true);
   let saving = $state(false);
   let status = $state('');
@@ -28,7 +29,11 @@
 
   onMount(() => {
     const timer = window.setInterval(() => { clock = Date.now(); }, 60_000);
-    return () => window.clearInterval(timer);
+    const stopQueue = watchQueue((state) => {
+      queue = state.queue;
+      if (state.queue_open !== null) settings.queue_open = state.queue_open;
+    });
+    return () => { window.clearInterval(timer); stopQueue(); };
   });
 
   type GroupSongOption = {
@@ -218,11 +223,17 @@
     }
   }
 
+  async function toggleQueue() {
+    const open = !settings.queue_open;
+    await setQueueOpen(open);
+    settings.queue_open = open;
+  }
+
   onMount(async () => {
     me = await getAccount();
     if (me.is_admin) {
       try {
-        ({ settings, groups, catalog } = await getAdmin());
+        ({ settings, groups, catalog, queue } = await getAdmin());
         trackerOrderIds = [...catalog.songs].sort(compareTrackerSongs).map((song) => song.id);
       } catch (caught) {
         error = caught instanceof Error ? caught.message : 'Could not open the owner dashboard';
@@ -254,12 +265,24 @@
 
     <section class="panel">
     <div class="tabs" role="tablist">
-      {#each [['songs','Song list'],['groups','Song groups'],['tags','Tags & ranking'],['tracker','Play tracker'],['settings','Settings']] as item}
+      {#each [['queue','Request queue'],['songs','Song list'],['groups','Song groups'],['tags','Tags & ranking'],['tracker','Play tracker'],['settings','Settings']] as item}
         <button class:active={tab === item[0]} class="tab" type="button" onclick={() => tab = item[0] as typeof tab}>{item[1]}</button>
       {/each}
     </div>
 
-    {#if tab === 'songs'}
+    {#if tab === 'queue'}
+      <div class="section-heading"><div><h2>Request queue</h2><p class="muted">This queue is stored on the Pi and updates the website, Twitch commands, and OBS panel immediately.</p></div><button class:green={!settings.queue_open} class="button secondary" onclick={() => runSave(toggleQueue, settings.queue_open ? 'Queue closed' : 'Queue opened')}>{settings.queue_open ? 'Close queue' : 'Open queue'}</button></div>
+      <p class="muted">OBS browser source: <a href="https://queue-api.gozarproductions.com/queue?panel" target="_blank" rel="noopener noreferrer">queue-api.gozarproductions.com/queue?panel</a></p>
+      {#if queue.length === 0}
+        <div class="empty"><strong>The request queue is empty.</strong></div>
+      {:else}
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Song</th><th>Requested by</th><th>Actions</th></tr></thead><tbody>
+          {#each queue as item, index (item.id)}
+            <tr><td>{index + 1}</td><td><span class="song-title">{item.title}</span></td><td>{item.user}</td><td><div class="actions"><button class="button small green" onclick={() => runSave(() => completeQueueItem(item.id), `${item.title} marked as performed`)}>Complete</button><button class="button small secondary" onclick={() => runSave(() => adminRemoveQueueItem(item.id), `${item.title} removed`)}>Remove</button></div></td></tr>
+          {/each}
+        </tbody></table></div>
+      {/if}
+    {:else if tab === 'songs'}
       <div class="section-heading"><div><h2>Editable song list</h2><p class="muted">Keep the same heading and one-song-per-line format. Adding or removing <code>[New]</code> updates tracking immediately.</p></div></div>
       <MarkdownEditor bind:value={settings.song_text} />
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveSettings(settings); ({ settings, groups, catalog } = await getAdmin()); }, 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button></div>
@@ -267,9 +290,6 @@
         <span class="muted">Update the published song list:</span>
         <a class="external-inline-link" href="https://www.twitch.tv/erallie/about" target="_blank" rel="noopener noreferrer">
           <span>Twitch About</span><ExternalArrow />
-        </a>
-        <a class="external-inline-link" href="https://mustardmine.com/channels/erallie/queue" target="_blank" rel="noopener noreferrer">
-          <span>MustardMine Queue</span><ExternalArrow />
         </a>
       </nav>
     {:else if tab === 'groups'}
@@ -405,8 +425,9 @@
         <label>Last-played dates retained per song<input type="number" min="1" bind:value={settings.last_played_history_limit} /></label>
         <label>Request cooldown after a performance (minutes)<input type="number" min="0" bind:value={settings.request_cooldown_minutes} /><small class="muted">Set to 0 to allow requests immediately.</small></label>
         <label>Default artist for songs without parentheses<input required bind:value={settings.default_artist} /></label>
-        <label>Queue group<input bind:value={settings.queue_group} /></label>
-        <label class="full">Queue WebSocket URL<input type="url" bind:value={settings.queue_websocket_url} /></label>
+        <label>Twitch request command<input bind:value={settings.twitch_request_command} /><small class="muted">Viewers type this followed by a song title.</small></label>
+        <label>Twitch remove command<input bind:value={settings.twitch_remove_command} /><small class="muted">Viewers type this followed by their queue number.</small></label>
+        <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_chat_enabled} /> Accept Twitch chat commands</label>
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Settings saved')}>Save settings</button></div>
     {/if}

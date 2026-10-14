@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import aiohttp
@@ -15,147 +15,39 @@ class SongAlreadyQueuedError(RuntimeError):
     pass
 
 
+class QueueClosedError(RuntimeError):
+    pass
+
+
 class QueueBridge:
+    """The authoritative, persistent queue hosted by this service."""
+
     def __init__(self, store: Store) -> None:
         self.store = store
-        self.session: aiohttp.ClientSession | None = None
-        self.socket: aiohttp.ClientWebSocketResponse | None = None
-        self.task: asyncio.Task[None] | None = None
-        self.previous: list[str] = []
-        self.current_queue: list[dict[str, str]] = []
-        self.queue_open: bool | None = None
-        self.listeners: set[asyncio.Queue[list[dict[str, str]]]] = set()
-        self.connected = False
-        self._send_lock = asyncio.Lock()
-        self._choose_reply: asyncio.Future[dict[str, Any]] | None = None
-        self._choose_expected: tuple[str, str, int] | None = None
-        self._unchoose_reply: asyncio.Future[dict[str, Any]] | None = None
-        self._unchoose_expected: tuple[int, list[dict[str, str]]] | None = None
-        self.auth_cookie = os.getenv("MUSTARDMINE_COOKIE", "").strip()
+        self.current_queue: list[dict[str, Any]] = []
+        self.queue_open = bool(store.settings()["queue_open"])
+        self.listeners: set[asyncio.Queue[list[dict[str, Any]]]] = set()
+        self.connected = True
+        self._lock = asyncio.Lock()
 
     async def start(self) -> None:
-        if not self.task or self.task.done():
-            self.task = asyncio.create_task(self._run(), name="mustardmine-queue")
+        self.refresh()
 
     async def close(self) -> None:
-        if self.task:
-            self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
-            self.task = None
-        if self.socket and not self.socket.closed:
-            await self.socket.close()
-        if self.session and not self.session.closed:
-            await self.session.close()
+        return
 
-    async def _run(self) -> None:
-        delay = 2
-        while True:
-            try:
-                settings = self.store.settings()
-                if not self.session or self.session.closed:
-                    self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45))
-                headers = {"Cookie": self.auth_cookie} if self.auth_cookie else None
-                async with self.session.ws_connect(settings["queue_websocket_url"], heartbeat=25, headers=headers) as socket:
-                    self.socket = socket
-                    self.connected = True
-                    self._publish_queue()
-                    delay = 2
-                    logging.info("Queue WebSocket connected (request authentication configured: %s)", bool(self.auth_cookie))
-                    await socket.send_json({"cmd": "init", "type": "chan_queue", "group": settings["queue_group"]})
-                    async for message in socket:
-                        if message.type == aiohttp.WSMsgType.TEXT:
-                            self._handle(json.loads(message.data))
-                        elif message.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                            break
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logging.exception("Queue WebSocket disconnected")
-            finally:
-                self.connected = False
-                self.socket = None
-                self.queue_open = None
-                self._publish_queue()
-                if self._choose_reply and not self._choose_reply.done():
-                    self._choose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the request"))
-                if self._unchoose_reply and not self._unchoose_reply.done():
-                    self._unchoose_reply.set_exception(RuntimeError("The request queue disconnected before confirming the removal"))
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, 60)
-
-    def _handle(self, payload: dict[str, Any]) -> None:
-        if payload.get("cmd") == "unchoose":
-            if self._unchoose_reply and not self._unchoose_reply.done():
-                if payload.get("error"):
-                    self._unchoose_reply.set_exception(RuntimeError(str(payload["error"])))
-                else:
-                    self._unchoose_reply.set_result(payload)
-            return
-        if payload.get("cmd") == "choose":
-            if payload.get("error"):
-                logging.warning("MustardMine rejected a queue request: %s", payload["error"])
-            if self._choose_reply and not self._choose_reply.done():
-                self._choose_reply.set_result(payload)
-            return
-        if payload.get("cmd") != "update":
-            return
-        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-        has_queue_status = "queue_open" in payload or "queue_open" in data
-        if has_queue_status:
-            raw_queue_open = payload["queue_open"] if "queue_open" in payload else data["queue_open"]
-            queue_open = self._parse_queue_open(raw_queue_open)
-            if queue_open is not None:
-                if queue_open is not self.queue_open:
-                    logging.info("Request queue is now %s", "open" if queue_open else "closed")
-                self.queue_open = queue_open
-        queue = payload.get("queue")
-        if queue is None:
-            queue = data.get("queue")
-        if not isinstance(queue, list):
-            if has_queue_status:
-                self._publish_queue()
-            return
-        # MustardMine includes queue_open while the queue is open and omits it
-        # from the full chan_queue update when the queue is closed.
-        if not has_queue_status and self.queue_open is not False:
-            self.queue_open = False
-            logging.info("Request queue is now closed")
-        self.current_queue = [
-            {
-                "title": str(item.get("title") or ""),
-                "user": str(item.get("user") or item.get("added_for") or item.get("requester") or ""),
-            }
-            for item in queue
-            if isinstance(item, dict) and item.get("title")
-        ]
-        self.store.reconcile_requests(self.current_queue)
+    def refresh(self) -> None:
+        self.current_queue = self.store.queue_entries()
+        self.queue_open = bool(self.store.settings()["queue_open"])
         self._publish_queue()
-        if self._unchoose_reply and not self._unchoose_reply.done() and self._unchoose_expected:
-            index, previous_queue = self._unchoose_expected
-            expected = previous_queue[:index] + previous_queue[index + 1:]
-            if self.current_queue == expected:
-                self._unchoose_reply.set_result({"cmd": "unchoose", "index": index, "confirmed_by": "queue_update"})
-        if self._choose_reply and not self._choose_reply.done() and self._choose_expected:
-            title, request_name, previous_count = self._choose_expected
-            current_count = sum(item["title"] == title for item in self.current_queue)
-            if current_count > previous_count:
-                self._choose_reply.set_result({"cmd": "choose", "selection": title, "confirmed_by": "queue_update"})
-        current = [item["title"] for item in self.current_queue]
-        removed = self._first_slot_removed(self.previous, current)
-        self.previous = current
-        if removed:
-            self.store.record_play(removed)
 
-    def subscribe(self) -> asyncio.Queue[list[dict[str, str]]]:
-        listener: asyncio.Queue[list[dict[str, str]]] = asyncio.Queue(maxsize=1)
+    def subscribe(self) -> asyncio.Queue[list[dict[str, Any]]]:
+        listener: asyncio.Queue[list[dict[str, Any]]] = asyncio.Queue(maxsize=1)
         listener.put_nowait(list(self.current_queue))
         self.listeners.add(listener)
         return listener
 
-    def unsubscribe(self, listener: asyncio.Queue[list[dict[str, str]]]) -> None:
+    def unsubscribe(self, listener: asyncio.Queue[list[dict[str, Any]]]) -> None:
         self.listeners.discard(listener)
 
     def _publish_queue(self) -> None:
@@ -165,94 +57,204 @@ class QueueBridge:
                 listener.get_nowait()
             listener.put_nowait(snapshot)
 
-    @staticmethod
-    def _parse_queue_open(value: Any) -> bool | None:
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float)):
-            return value != 0
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in {"1", "true", "yes", "on", "open", "opened"}:
-                return True
-            if normalized in {"0", "false", "no", "off", "closed", "close", ""}:
-                return False
-        logging.warning("Ignoring unrecognized queue_open value: %r", value)
-        return None
+    async def set_open(self, open_: bool) -> None:
+        async with self._lock:
+            self.store.set_queue_open(open_)
+            self.refresh()
+        logging.info("Request queue is now %s", "open" if open_ else "closed")
 
-    @staticmethod
-    def _first_slot_removed(previous: list[str], current: list[str]) -> str | None:
-        if not previous or previous == current:
-            return None
-        if len(current) > len(previous) or previous[0] in current:
-            return None
-        if len(previous) == 1:
-            return previous[0] if not current else None
-        # A normal completion shifts every remaining song one place forward.
-        overlap = min(len(previous) - 1, len(current))
-        if overlap > 0 and previous[1:1 + overlap] == current[:overlap]:
-            return previous[0]
-        return None
-
-    async def request(self, title: str, request_name: str, grouped_titles: list[str] | None = None) -> None:
-        if not self.auth_cookie:
-            raise RuntimeError("Song requests are not configured on the server")
-        payload = {"cmd": "choose", "selection": title, "added_for": request_name}
-        async with self._send_lock:
-            if not self.socket or self.socket.closed:
-                raise RuntimeError("The request queue is temporarily disconnected")
+    async def request(
+        self,
+        title: str,
+        request_name: str,
+        grouped_titles: list[str] | None = None,
+        *,
+        user_id: str | None = None,
+        requester_provider: str = "",
+        requester_provider_id: str = "",
+    ) -> None:
+        async with self._lock:
+            self.refresh()
+            if not self.queue_open:
+                raise QueueClosedError("The request queue is closed")
             if grouped_titles:
                 queued = {self._queue_title_key(item["title"]) for item in self.current_queue}
                 if any(self._queue_title_key(grouped_title) in queued for grouped_title in grouped_titles):
                     raise SongAlreadyQueuedError("Song is already in the queue!")
-            reply = asyncio.get_running_loop().create_future()
-            self._choose_reply = reply
-            previous_count = sum(item["title"] == title for item in self.current_queue)
-            self._choose_expected = (title, request_name, previous_count)
-            try:
-                logging.info("Sending MustardMine queue request for %r on behalf of %r", title, request_name)
-                await self.socket.send_json(payload)
-                result = await asyncio.wait_for(reply, timeout=10)
-            except TimeoutError as error:
-                logging.warning("MustardMine did not confirm the queue request for %r", title)
-                raise RuntimeError("The request queue did not confirm the request") from error
-            finally:
-                if self._choose_reply is reply:
-                    self._choose_reply = None
-                    self._choose_expected = None
-            if result.get("error"):
-                raise RuntimeError(str(result["error"]))
-            logging.info("MustardMine confirmed the queue request for %r", result.get("selection") or title)
+            self.store.enqueue(
+                title,
+                request_name,
+                user_id=user_id,
+                requester_provider=requester_provider,
+                requester_provider_id=requester_provider_id,
+            )
+            self.refresh()
+        logging.info("Queued %r on behalf of %r", title, request_name)
 
     async def remove(self, index: int, expected_title: str, expected_user: str) -> None:
-        if not self.auth_cookie:
-            raise RuntimeError("Queue removals are not configured on the server")
-        async with self._send_lock:
-            if not self.socket or self.socket.closed:
-                raise RuntimeError("The request queue is temporarily disconnected")
+        async with self._lock:
+            self.refresh()
             if index < 0 or index >= len(self.current_queue):
                 raise RuntimeError("That request is no longer in the queue")
             current = self.current_queue[index]
             if current["title"] != expected_title or current["user"] != expected_user:
                 raise RuntimeError("The request queue changed; please try again")
-            reply = asyncio.get_running_loop().create_future()
-            self._unchoose_reply = reply
-            self._unchoose_expected = (index, list(self.current_queue))
-            try:
-                logging.info("Sending MustardMine queue removal for index %d (%r)", index, expected_title)
-                await self.socket.send_json({"cmd": "unchoose", "index": index})
-                await asyncio.wait_for(reply, timeout=10)
-            except TimeoutError as error:
-                logging.warning("MustardMine did not confirm removal for queue index %d", index)
-                raise RuntimeError("The request queue did not confirm the removal") from error
-            finally:
-                if self._unchoose_reply is reply:
-                    self._unchoose_reply = None
-                    self._unchoose_expected = None
+            self.store.remove_queue_entry(str(current["id"]))
+            self.refresh()
+
+    async def remove_by_id(self, entry_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            removed = self.store.remove_queue_entry(entry_id)
+            self.refresh()
+            return removed
+
+    async def complete(self, entry_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            removed = self.store.remove_queue_entry(entry_id)
+            if removed:
+                self.store.record_play(str(removed["raw_title"]))
+            self.refresh()
+            return removed
 
     @staticmethod
     def _queue_title_key(title: str) -> str:
         return " ".join(title.casefold().split())
+
+
+class TwitchChatBridge:
+    def __init__(
+        self,
+        store: Store,
+        queue: QueueBridge,
+        client_id: str,
+        broadcaster_id: str,
+        token_provider: Callable[[], Awaitable[str]],
+    ) -> None:
+        self.store = store
+        self.queue = queue
+        self.client_id = client_id
+        self.broadcaster_id = broadcaster_id
+        self.token_provider = token_provider
+        self.task: asyncio.Task[None] | None = None
+        self.session: aiohttp.ClientSession | None = None
+        self.seen_message_ids: set[str] = set()
+        self.connected = False
+
+    async def start(self) -> None:
+        if self.client_id and self.broadcaster_id and (not self.task or self.task.done()):
+            self.task = asyncio.create_task(self._run(), name="twitch-chat")
+
+    async def close(self) -> None:
+        if self.task:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
+            self.task = None
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def _run(self) -> None:
+        delay = 2
+        while True:
+            try:
+                if not self.store.settings()["twitch_chat_enabled"]:
+                    await asyncio.sleep(30)
+                    continue
+                token = await self.token_provider()
+                if not self.session or self.session.closed:
+                    self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+                async with self.session.ws_connect("wss://eventsub.wss.twitch.tv/ws", heartbeat=25) as socket:
+                    welcome = await socket.receive_json(timeout=15)
+                    session_id = welcome["payload"]["session"]["id"]
+                    await self._subscribe(session_id, token)
+                    self.connected = True
+                    delay = 2
+                    logging.info("Twitch chat command listener connected")
+                    async for message in socket:
+                        if message.type != aiohttp.WSMsgType.TEXT:
+                            continue
+                        payload = json.loads(message.data)
+                        kind = payload.get("metadata", {}).get("message_type")
+                        if kind == "notification":
+                            message_id = str(payload.get("metadata", {}).get("message_id") or "")
+                            if message_id and message_id in self.seen_message_ids:
+                                continue
+                            if message_id:
+                                self.seen_message_ids.add(message_id)
+                                if len(self.seen_message_ids) > 1000:
+                                    self.seen_message_ids.clear()
+                            await self._handle_chat(payload.get("payload", {}).get("event", {}))
+                        elif kind == "session_reconnect":
+                            break
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.exception("Twitch chat command listener disconnected")
+            finally:
+                self.connected = False
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 60)
+
+    async def _subscribe(self, session_id: str, token: str) -> None:
+        assert self.session
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Client-Id": self.client_id,
+            "Content-Type": "application/json",
+        }
+        body = {
+            "type": "channel.chat.message",
+            "version": "1",
+            "condition": {
+                "broadcaster_user_id": self.broadcaster_id,
+                "user_id": self.broadcaster_id,
+            },
+            "transport": {"method": "websocket", "session_id": session_id},
+        }
+        async with self.session.post(
+            "https://api.twitch.tv/helix/eventsub/subscriptions", headers=headers, json=body
+        ) as response:
+            if response.status >= 400:
+                detail = await response.text()
+                raise RuntimeError(f"Twitch chat subscription failed ({response.status}): {detail}")
+
+    async def _handle_chat(self, event: dict[str, Any]) -> None:
+        text = str(event.get("message", {}).get("text") or "").strip()
+        requester_id = str(event.get("chatter_user_id") or "")
+        requester_name = str(event.get("chatter_user_name") or event.get("chatter_user_login") or "Viewer")
+        settings = self.store.settings()
+        request_command = str(settings["twitch_request_command"]).strip().casefold()
+        remove_command = str(settings["twitch_remove_command"]).strip().casefold()
+        command, _, argument = text.partition(" ")
+        command = command.casefold()
+        if command == request_command and argument.strip():
+            candidate = self.store.request_candidate(argument.strip())
+            if not candidate:
+                return
+            if self.store.request_cooldown_remaining_minutes(candidate["song_id"]) is not None:
+                return
+            user_id = self.store.user_for_identity("twitch", requester_id)
+            try:
+                await self.queue.request(
+                    candidate["title"],
+                    requester_name,
+                    candidate["grouped_titles"],
+                    user_id=user_id,
+                    requester_provider="twitch",
+                    requester_provider_id=requester_id,
+                )
+            except (QueueClosedError, SongAlreadyQueuedError):
+                return
+        elif command == remove_command and argument.strip().isdigit():
+            index = int(argument.strip()) - 1
+            self.queue.refresh()
+            if index < 0 or index >= len(self.queue.current_queue):
+                return
+            item = self.queue.current_queue[index]
+            if item.get("requester_provider") == "twitch" and item.get("requester_provider_id") == requester_id:
+                await self.queue.remove_by_id(str(item["id"]))
 
 
 async def hourly_maintenance(store: Store) -> None:

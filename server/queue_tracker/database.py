@@ -37,8 +37,10 @@ DEFAULT_SETTINGS = {
     "last_played_history_limit": 10,
     "request_cooldown_minutes": 0,
     "default_artist": "Erallie",
-    "queue_websocket_url": "wss://sikorsky.mustardmine.com/ws",
-    "queue_group": "#275206561",
+    "queue_open": False,
+    "twitch_chat_enabled": True,
+    "twitch_request_command": "!request",
+    "twitch_remove_command": "!unchoose",
 }
 
 
@@ -89,6 +91,10 @@ class Store:
           id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
           raw_title TEXT NOT NULL, request_name TEXT NOT NULL, requested_at TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'queued');
+        CREATE TABLE IF NOT EXISTS queue_entries(
+          id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          requester_provider TEXT NOT NULL DEFAULT '', requester_provider_id TEXT NOT NULL DEFAULT '',
+          raw_title TEXT NOT NULL, request_name TEXT NOT NULL, requested_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS play_events(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           raw_title TEXT NOT NULL REFERENCES songs(raw_title) ON DELETE CASCADE,
@@ -97,6 +103,7 @@ class Store:
         CREATE INDEX IF NOT EXISTS idx_group_members_title ON group_members(raw_title);
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_play_events_song_time ON play_events(raw_title, played_at);
+        CREATE INDEX IF NOT EXISTS idx_queue_entries_time ON queue_entries(requested_at, id);
         """)
         tag_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(tags)")}
         if "position" not in tag_columns:
@@ -151,6 +158,10 @@ class Store:
                     value = max(1, int(values[key]))
                 elif key == "request_cooldown_minutes":
                     value = max(0, int(values[key]))
+                elif key in {"queue_open", "twitch_chat_enabled"}:
+                    value = bool(values[key])
+                elif key in {"twitch_request_command", "twitch_remove_command"}:
+                    value = str(values[key]).strip() or str(DEFAULT_SETTINGS[key])
                 elif key == "default_artist":
                     value = str(values[key]).strip() or DEFAULT_SETTINGS["default_artist"]
                 else:
@@ -511,6 +522,107 @@ class Store:
     def record_request(self, user_id: str, raw_title: str, request_name: str) -> None:
         self.db.execute("INSERT INTO requests(id,user_id,raw_title,request_name,requested_at) VALUES(?,?,?,?,?)", (str(uuid.uuid4()), user_id, raw_title, request_name, now()))
         self.db.commit()
+
+    def queue_entries(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": row["id"],
+                "title": row["raw_title"],
+                "user": row["request_name"],
+                "user_id": row["user_id"],
+                "requester_provider": row["requester_provider"],
+                "requester_provider_id": row["requester_provider_id"],
+            }
+            for row in self.db.execute(
+                "SELECT * FROM queue_entries ORDER BY requested_at,id"
+            )
+        ]
+
+    def enqueue(
+        self,
+        raw_title: str,
+        request_name: str,
+        user_id: str | None = None,
+        requester_provider: str = "",
+        requester_provider_id: str = "",
+    ) -> str:
+        entry_id = str(uuid.uuid4())
+        self.db.execute(
+            """INSERT INTO queue_entries(
+                 id,user_id,requester_provider,requester_provider_id,raw_title,request_name,requested_at
+               ) VALUES(?,?,?,?,?,?,?)""",
+            (
+                entry_id,
+                user_id,
+                requester_provider,
+                requester_provider_id,
+                raw_title,
+                request_name,
+                now(),
+            ),
+        )
+        self.db.commit()
+        return entry_id
+
+    def remove_queue_entry(self, entry_id: str) -> dict[str, Any] | None:
+        row = self.db.execute("SELECT * FROM queue_entries WHERE id=?", (entry_id,)).fetchone()
+        if not row:
+            return None
+        self.db.execute("DELETE FROM queue_entries WHERE id=?", (entry_id,))
+        self.db.commit()
+        return dict(row)
+
+    def set_queue_open(self, open_: bool) -> None:
+        self.save_settings({"queue_open": bool(open_)})
+
+    def user_for_identity(self, provider: str, provider_user_id: str) -> str | None:
+        return self.identity_user(provider, provider_user_id)
+
+    def queue_entry_owned_by(self, entry_id: str, user_id: str) -> bool:
+        row = self.db.execute(
+            "SELECT user_id,requester_provider,requester_provider_id FROM queue_entries WHERE id=?",
+            (entry_id,),
+        ).fetchone()
+        if not row:
+            return False
+        if row["user_id"] == user_id:
+            return True
+        return bool(
+            row["requester_provider"]
+            and row["requester_provider_id"]
+            and self.db.execute(
+                """SELECT 1 FROM identities
+                   WHERE user_id=? AND provider=? AND provider_user_id=?""",
+                (user_id, row["requester_provider"], row["requester_provider_id"]),
+            ).fetchone()
+        )
+
+    def request_candidate(self, query: str) -> dict[str, Any] | None:
+        needle = queue_key(query)
+        if not needle:
+            return None
+        catalog = self.catalog()["songs"]
+        exact = [
+            song for song in catalog
+            if queue_key(song["title"]) == needle
+            or queue_key(f"{song['title']} ({song['parenthetical']})") == needle
+        ]
+        candidates = exact or [
+            song for song in catalog
+            if needle in queue_key(song["title"])
+            or needle in queue_key(f"{song['title']} ({song['parenthetical']})")
+        ]
+        if len(candidates) != 1:
+            return None
+        song = candidates[0]
+        title = self.request_title(song["id"])
+        if not title:
+            return None
+        return {
+            "song_id": song["id"],
+            "title": title,
+            "grouped_titles": self.group_request_titles(song["id"]),
+        }
 
     def reconcile_requests(self, queue: list[dict[str, str]]) -> None:
         available: dict[tuple[str, str], int] = {}

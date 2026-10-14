@@ -1,6 +1,6 @@
 # Erallie Queue Tracker
 
-A lightweight Svelte/TypeScript song-request site with a Python connector for the Raspberry Pi. The public site is static and can be hosted on GitHub Pages. The Pi connector sits behind a Cloudflare Tunnel, owns the database and OAuth callbacks, keeps a client connection to the externally hosted MustardMine queue, and records completed songs. It does not host or replace the queue.
+A lightweight Svelte/TypeScript song-request site with a Python service for the Raspberry Pi. The public site is static and can be hosted on GitHub Pages. The Pi service sits behind a Cloudflare Tunnel and owns the database, request queue, Twitch chat listener, OBS panel, and OAuth callbacks.
 
 ## What is included
 
@@ -10,7 +10,9 @@ A lightweight Svelte/TypeScript song-request site with a Python connector for th
 - Twitch, Discord, and Google sign-in with account linking. Request names prefer Twitch, then Discord, then Google. Removing the final identity deletes the account.
 - Play totals and last-played dates for every song.
 - Configurable request cooldown that temporarily blocks songs performed within the chosen number of minutes.
-- Owner dashboard for the source song text, same-song groups, tags and ranking points, manual play corrections, and queue settings.
+- Owner dashboard for queue controls, the source song text, same-song groups, tags and ranking points, manual play corrections, and queue settings.
+- Persistent self-hosted request queue with live website updates and an OBS-ready transparent panel.
+- Twitch chat requests and removals through configurable commands.
 - Hourly New-song eligibility checks. A song graduates only after both its play threshold and minimum age are reached.
 - No generated `# New Songs` section is added to copied or editable text.
 
@@ -22,15 +24,16 @@ A lightweight Svelte/TypeScript song-request site with a Python connector for th
 
 The frontend shows representative preview data when no API URL is set. Writes stay disabled until the owner is signed in.
 
-## Pi connector and API
+## Pi service and API
 
 Requires Python 3.11 or newer.
 
 1. Enter `server`, create a virtual environment, and install `requirements.txt`.
 2. Copy `.env.example` to `.env` and fill in the public URL, frontend origins, OAuth credentials, owner identity IDs, and a Fernet encryption key.
-3. Sign in to MustardMine in a browser as the broadcaster or a moderator for the queue. Copy the value of the `Cookie` request header (everything after `Cookie:`) from that logged-in MustardMine session into `MUSTARDMINE_COOKIE` in `.env`. Treat this value like a password. It lets the Pi submit `choose` commands with `added_for` names; without it, the public socket can read the queue but MustardMine rejects requests as `Not logged in`.
+3. Put the broadcaster Twitch ID in `OWNER_IDENTITIES` as `twitch:YOUR_TWITCH_ID`.
 4. Run `python -m queue_tracker`.
 5. Point a Cloudflare Tunnel hostname at `http://127.0.0.1:8787`. Examples for cloudflared and systemd are in `server/deploy`.
+6. Sign out and back in with the owner Twitch account once after deploying. Twitch will ask for chat-read access, which lets the service receive request commands. No MustardMine cookie is used.
 
 OAuth callback URLs:
 
@@ -40,6 +43,10 @@ OAuth callback URLs:
 
 The session cookie is HTTP-only, Secure, and SameSite=None so it works between GitHub Pages and the API hostname. CORS is restricted to `FRONTEND_ORIGINS`.
 
+The default Twitch commands are `!request Song Title` and `!unchoose 2`. Both command names can be changed in the dashboard Settings tab. A title must resolve to exactly one song. A removal only succeeds when that Twitch account owns the selected queue entry.
+
+Use `https://YOUR_API_HOST/queue?panel` as an OBS Browser Source. The panel has a transparent background and updates in place through the same live event stream as the website.
+
 ## GitHub Pages
 
 Set the repository Actions variable `PUBLIC_QUEUE_API_URL` to the public Cloudflare hostname, then enable GitHub Pages with **GitHub Actions** as its source. The included workflow checks, builds, and deploys the site on pushes to `main`.
@@ -48,12 +55,6 @@ Set the repository Actions variable `PUBLIC_QUEUE_API_URL` to the public Cloudfl
 
 `server/seed_songlist.md` contains the current song list. The service imports it only for a new database. The two requested same-song groups are also seeded on first launch.
 
-## External queue protocol
+## Queue behavior
 
-The queue continues to be hosted by MustardMine. The Pi opens `wss://sikorsky.mustardmine.com/ws` as a client and sends:
-
-```json
-{"cmd":"init","type":"chan_queue","group":"#275206561"}
-```
-
-It records a play when an update shows that the previous first item shifted out and all remaining items moved forward. Song requests are sent back through that same WebSocket connection using the configured command (default `choose`), the first group member as `selection`, and the signed-in display name as `added_for`.
+Queue entries are stored in the existing SQLite database. Website and Twitch requests feed the same list. Removing a request does not affect play history; choosing **Complete** in the owner dashboard removes it and records the performance. Opening or closing the queue is also controlled from the dashboard and updates the public site and OBS panel immediately.

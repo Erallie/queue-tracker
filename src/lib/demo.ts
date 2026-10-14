@@ -33,8 +33,10 @@ export const demoSettings: Settings = {
   last_played_history_limit: 10,
   request_cooldown_minutes: 0,
   default_artist: 'Erallie',
-  queue_websocket_url: 'wss://sikorsky.mustardmine.com/ws',
-  queue_group: '#275206561'
+  queue_open: false,
+  twitch_chat_enabled: true,
+  twitch_request_command: '!request',
+  twitch_remove_command: '!unchoose'
 };
 
 export const demoGroups: SongGroup[] = [

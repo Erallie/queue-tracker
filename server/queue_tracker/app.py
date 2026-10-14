@@ -17,8 +17,8 @@ from dotenv import load_dotenv
 
 from .auth_errors import provider_auth_error, return_to_with_error
 from .database import Store
-from .oauth import PROVIDERS, authorize_url, exchange, profile
-from .queue import QueueBridge, SongAlreadyQueuedError, hourly_maintenance
+from .oauth import PROVIDERS, authorize_url, exchange, profile, refresh_twitch_token
+from .queue import QueueBridge, QueueClosedError, SongAlreadyQueuedError, TwitchChatBridge, hourly_maintenance
 
 
 class Service:
@@ -36,6 +36,14 @@ class Service:
         self.http: aiohttp.ClientSession | None = None
         self.cookie_name = "queue_tracker_session"
         self.owner_identities = {item.strip() for item in os.getenv("OWNER_IDENTITIES", "").split(",") if item.strip()}
+        twitch_owner = next((item.split(":", 1)[1] for item in self.owner_identities if item.startswith("twitch:")), "")
+        self.twitch_chat = TwitchChatBridge(
+            self.store,
+            self.queue,
+            os.getenv("TWITCH_CLIENT_ID", ""),
+            twitch_owner,
+            self.twitch_chat_token,
+        )
         self.event_tasks: set[asyncio.Task[Any]] = set()
         self.catalog_listeners: set[asyncio.Queue[dict[str, Any]]] = set()
         self.store.on_catalog_changed = self.publish_catalog
@@ -48,11 +56,16 @@ class Service:
         app.router.add_get("/api/queue", self.current_queue)
         app.router.add_get("/api/queue/events", self.queue_events)
         app.router.add_delete("/api/queue/{index}", self.remove_queue_item)
+        app.router.add_get("/queue", self.queue_panel)
+        app.router.add_get("/queue/panel", self.queue_panel)
         app.router.add_get("/api/me", self.me)
         app.router.add_post("/api/logout", self.logout)
         app.router.add_delete("/api/identities/{provider}", self.unlink)
         app.router.add_post("/api/songs/{song_id}/request", self.request_song)
         app.router.add_get("/api/admin", self.admin)
+        app.router.add_put("/api/admin/queue/status", self.set_queue_status)
+        app.router.add_delete("/api/admin/queue/{entry_id}", self.admin_remove_queue_item)
+        app.router.add_post("/api/admin/queue/{entry_id}/complete", self.complete_queue_item)
         app.router.add_put("/api/admin/settings", self.save_settings)
         app.router.add_put("/api/admin/groups", self.save_groups)
         app.router.add_put("/api/admin/tags", self.save_tags)
@@ -87,11 +100,13 @@ class Service:
     async def startup(self, _app: web.Application) -> None:
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
         await self.queue.start()
+        await self.twitch_chat.start()
         _app["maintenance_task"] = asyncio.create_task(hourly_maintenance(self.store), name="hourly-maintenance")
 
     async def cleanup(self, app: web.Application) -> None:
         app["maintenance_task"].cancel()
         await self.queue.close()
+        await self.twitch_chat.close()
         if self.http: await self.http.close()
         self.store.close()
 
@@ -126,6 +141,48 @@ class Service:
             if match: return str(match["display_name"])
         return "Guest"
 
+    async def twitch_chat_token(self) -> str:
+        broadcaster_id = self.twitch_chat.broadcaster_id
+        user_id = self.store.identity_user("twitch", broadcaster_id)
+        if not user_id:
+            raise RuntimeError("Relink the owner Twitch account to enable chat commands")
+        identity = next(
+            (item for item in self.store.identities(user_id, tokens=True) if item["provider"] == "twitch"),
+            None,
+        )
+        if not identity:
+            raise RuntimeError("Relink the owner Twitch account to enable chat commands")
+        access_token = self.cipher.decrypt(identity["access_token"].encode()).decode()
+        refresh_token = self.cipher.decrypt(identity["refresh_token"].encode()).decode() if identity["refresh_token"] else ""
+        assert self.http
+        async with self.http.get(
+            "https://id.twitch.tv/oauth2/validate",
+            headers={"Authorization": f"OAuth {access_token}"},
+        ) as response:
+            validation = await response.json()
+        if response.status == 200:
+            if "user:read:chat" not in validation.get("scopes", []):
+                raise RuntimeError("Relink the owner Twitch account to grant chat access")
+            return access_token
+        if not refresh_token:
+            raise RuntimeError("Relink the owner Twitch account to refresh chat access")
+        refreshed = await refresh_twitch_token(
+            self.http,
+            os.getenv("TWITCH_CLIENT_ID", ""),
+            os.getenv("TWITCH_CLIENT_SECRET", ""),
+            refresh_token,
+        )
+        self.store.save_identity(
+            user_id,
+            "twitch",
+            identity["provider_user_id"],
+            identity["display_name"],
+            identity["avatar_url"],
+            self.cipher.encrypt(refreshed["access_token"].encode()).decode(),
+            self.cipher.encrypt(refreshed["refresh_token"].encode()).decode(),
+        )
+        return refreshed["access_token"]
+
     def issue_session(self, response: web.StreamResponse, user_id: str) -> None:
         token = secrets.token_urlsafe(32)
         expires = (datetime.now(UTC) + timedelta(days=30)).isoformat()
@@ -137,7 +194,7 @@ class Service:
         except Exception: raise web.HTTPBadRequest(text='{"error":"Invalid JSON"}', content_type="application/json")
 
     async def health(self, _request: web.Request) -> web.Response:
-        return web.json_response({"ok": True, "queue_connected": self.queue.connected, "queue_requests_configured": bool(self.queue.auth_cookie)})
+        return web.json_response({"ok": True, "queue_connected": True, "queue_requests_configured": True, "twitch_chat_connected": self.twitch_chat.connected})
 
     async def catalog(self, _request: web.Request) -> web.Response:
         return web.json_response(self.store.catalog())
@@ -182,10 +239,42 @@ class Service:
                 self.event_tasks.discard(task)
         return response
 
-    def queue_for_user(self, user_id: str | None, queue: list[dict[str, str]] | None = None) -> list[dict[str, Any]]:
+    async def queue_panel(self, _request: web.Request) -> web.Response:
+        html = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Erallie Request Queue</title><style>
+:root{color-scheme:dark;font-family:Montserrat,Arial,sans-serif;color:#fff}*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:transparent}body{padding:10px}
+#status{font-size:18px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin:0 0 8px;text-shadow:0 2px 5px #000}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:#d95050;box-shadow:0 0 0 5px #d9505030}
+.open .dot{background:#1c9b58;box-shadow:0 0 0 5px #1c9b5830}
+#status span{display:inline;color:inherit;margin:0}
+ol{list-style:none;padding:0;margin:0;display:grid;gap:5px;counter-reset:item}
+li{counter-increment:item;display:grid;grid-template-columns:42px 1fr;align-items:center;min-height:62px;padding:9px 14px;background:#181412e8;border:1px solid #756b65}
+li:before{content:counter(item);font-size:25px;font-weight:700;color:#e95e58;text-align:center}
+strong,span{display:block}strong{font-size:22px;line-height:1.15}span{font-size:16px;color:#d2c9c3;margin-top:3px}
+.empty{padding:18px;background:#181412e8;border-left:3px solid #756b65;font-size:20px}
+</style></head><body><div id="status"><i class="dot"></i><span>Queue connecting</span></div><main></main>
+<script>
+const status=document.querySelector('#status'),label=status.querySelector('span'),main=document.querySelector('main');
+function render(data){status.classList.toggle('open',data.queue_open===true);label.textContent=data.queue_open===true?'Queue open':data.queue_open===false?'Queue closed':'Queue connecting';
+if(!data.queue.length){main.innerHTML='<div class="empty">The request queue is empty.</div>';return}
+const list=document.createElement('ol');for(const item of data.queue){const row=document.createElement('li'),text=document.createElement('div'),title=document.createElement('strong'),user=document.createElement('span');title.textContent=item.title;user.textContent='Requested by '+item.user;text.append(title,user);row.append(text);list.append(row)}main.replaceChildren(list)}
+fetch('/api/queue').then(r=>r.json()).then(render);const events=new EventSource('/api/queue/events');events.addEventListener('queue',event=>render(JSON.parse(event.data)));
+</script></body></html>"""
+        return web.Response(text=html, content_type="text/html")
+
+    def queue_for_user(self, user_id: str | None, queue: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         snapshot = queue if queue is not None else self.queue.current_queue
-        owned = self.store.owned_queue_indexes(user_id, snapshot)
-        return [{**item, "can_remove": index in owned} for index, item in enumerate(snapshot)]
+        return [
+            {
+                "id": item["id"],
+                "title": item["title"],
+                "user": item["user"],
+                "can_remove": bool(user_id and self.store.queue_entry_owned_by(str(item["id"]), user_id)),
+            }
+            for item in snapshot
+        ]
 
     async def current_queue(self, request: web.Request) -> web.Response:
         return web.json_response({"queue": self.queue_for_user(self.user_id(request)), "connected": self.queue.connected, "queue_open": self.queue.queue_open})
@@ -232,14 +321,13 @@ class Service:
         queue = self.queue.current_queue
         if index < 0 or index >= len(queue):
             raise web.HTTPNotFound(text='{"error":"That request is no longer in the queue"}', content_type="application/json")
-        if index not in self.store.owned_queue_indexes(user_id, queue):
+        if not self.store.queue_entry_owned_by(str(queue[index]["id"]), user_id):
             raise web.HTTPForbidden(text='{"error":"You can only remove your own requests"}', content_type="application/json")
         item = dict(queue[index])
         try:
             await self.queue.remove(index, item["title"], item["user"])
         except RuntimeError as error:
             return web.json_response({"error": str(error)}, status=503)
-        self.store.mark_request_removed(user_id, item["title"], item["user"])
         return web.json_response({"removed": True})
 
     async def me(self, request: web.Request) -> web.Response:
@@ -274,17 +362,38 @@ class Service:
             )
         name = self.request_name(user_id)
         try:
-            await self.queue.request(title, name, self.store.group_request_titles(song_id))
+            await self.queue.request(title, name, self.store.group_request_titles(song_id), user_id=user_id)
         except SongAlreadyQueuedError as error:
+            return web.json_response({"error": str(error)}, status=409)
+        except QueueClosedError as error:
             return web.json_response({"error": str(error)}, status=409)
         except RuntimeError as error:
             return web.json_response({"error": str(error)}, status=503)
-        self.store.record_request(user_id, title, name)
         return web.json_response({"queued": True, "message": f"{title} was requested for {name}"})
 
     async def admin(self, request: web.Request) -> web.Response:
         self.require_admin(request)
-        return web.json_response({"settings": self.store.settings(), "groups": self.store.groups(), "catalog": self.store.catalog()})
+        return web.json_response({"settings": self.store.settings(), "groups": self.store.groups(), "catalog": self.store.catalog(), "queue": self.queue_for_user(self.user_id(request))})
+
+    async def set_queue_status(self, request: web.Request) -> web.Response:
+        self.require_admin(request)
+        body = await self.json(request)
+        await self.queue.set_open(bool(body.get("open")))
+        return web.json_response({"open": self.queue.queue_open})
+
+    async def admin_remove_queue_item(self, request: web.Request) -> web.Response:
+        self.require_admin(request)
+        removed = await self.queue.remove_by_id(request.match_info["entry_id"])
+        if not removed:
+            raise web.HTTPNotFound(text='{"error":"That request is no longer in the queue"}', content_type="application/json")
+        return web.json_response({"removed": True})
+
+    async def complete_queue_item(self, request: web.Request) -> web.Response:
+        self.require_admin(request)
+        completed = await self.queue.complete(request.match_info["entry_id"])
+        if not completed:
+            raise web.HTTPNotFound(text='{"error":"That request is no longer in the queue"}', content_type="application/json")
+        return web.json_response({"completed": True})
 
     async def save_settings(self, request: web.Request) -> web.Response:
         self.require_admin(request); self.store.save_settings(await self.json(request)); return web.json_response({"ok": True})

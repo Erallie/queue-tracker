@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/public';
 import { demoAccount, demoCatalog, demoGroups, demoSettings } from './demo';
-import type { Account, Catalog, QueueState, Settings, SongGroup } from './types';
+import type { Account, Catalog, QueueItem, QueueState, Settings, SongGroup } from './types';
 
 const api = (env.PUBLIC_QUEUE_API_URL || '').replace(/\/$/, '');
 export const accountChangedEvent = 'queue-tracker-account-changed';
@@ -52,8 +52,8 @@ export function watchQueue(update: (state: QueueState) => void): () => void {
   return () => events.close();
 }
 
-export async function getAdmin(): Promise<{ settings: Settings; groups: SongGroup[]; catalog: Catalog }> {
-  if (!api) return { settings: demoSettings, groups: demoGroups, catalog: demoCatalog };
+export async function getAdmin(): Promise<{ settings: Settings; groups: SongGroup[]; catalog: Catalog; queue: QueueItem[] }> {
+  if (!api) return { settings: demoSettings, groups: demoGroups, catalog: demoCatalog, queue: [] };
   return request('/api/admin');
 }
 
@@ -85,3 +85,6 @@ export async function saveTags(tags: Catalog['tags']): Promise<void> { await req
 export async function saveSongTags(songId: string, tags: string[]): Promise<void> { await request(`/api/admin/songs/${songId}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }); }
 export async function adjustPlay(songId: string, delta: number): Promise<{ song: Catalog['songs'][number] }> { return request(`/api/admin/songs/${songId}/plays`, { method: 'POST', body: JSON.stringify({ delta }) }); }
 export async function removeNewTag(songId: string): Promise<void> { await request(`/api/admin/songs/${songId}/new`, { method: 'DELETE' }); }
+export async function setQueueOpen(open: boolean): Promise<void> { await request('/api/admin/queue/status', { method: 'PUT', body: JSON.stringify({ open }) }); }
+export async function adminRemoveQueueItem(entryId: string): Promise<void> { await request(`/api/admin/queue/${encodeURIComponent(entryId)}`, { method: 'DELETE' }); }
+export async function completeQueueItem(entryId: string): Promise<void> { await request(`/api/admin/queue/${encodeURIComponent(entryId)}/complete`, { method: 'POST' }); }
