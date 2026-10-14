@@ -48,6 +48,7 @@ export type Settings = {
   recently_graduated_days: number;
   last_played_history_limit: number;
   request_cooldown_minutes: number;
+  queue_limit_per_person: number;
   default_artist: string;
   queue_open: boolean;
   queue_close_after: number;

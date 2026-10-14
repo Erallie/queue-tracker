@@ -7,7 +7,7 @@ from types import SimpleNamespace
 sys.modules.setdefault("aiohttp", SimpleNamespace())
 
 from queue_tracker.database import Store
-from queue_tracker.queue import QueueBridge, QueueClosedError, SongAlreadyQueuedError
+from queue_tracker.queue import QueueBridge, QueueClosedError, QueueLimitError, SongAlreadyQueuedError
 
 
 class QueueTests(unittest.IsolatedAsyncioTestCase):
@@ -46,9 +46,23 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
                 ["Primary Version (Show)", "Alternate Version (Show)"],
             )
 
-    async def test_ungrouped_duplicate_is_allowed(self):
+    async def test_ungrouped_duplicate_is_rejected(self):
         await self.queue.request("Song (Show)", "One")
-        await self.queue.request("Song (Show)", "Two")
+        with self.assertRaisesRegex(SongAlreadyQueuedError, "already in the queue"):
+            await self.queue.request("Song (Show)", "Two")
+        self.assertEqual(len(self.queue.current_queue), 1)
+
+    async def test_per_person_pending_request_limit_is_enforced(self):
+        await self.queue.request("First (Show)", "Viewer", requester_provider="twitch", requester_provider_id="123")
+        with self.assertRaisesRegex(QueueLimitError, "already have requests pending"):
+            await self.queue.request("Second (Show)", "Viewer", requester_provider="twitch", requester_provider_id="123")
+        await self.queue.request("Second (Show)", "Other Viewer", requester_provider="twitch", requester_provider_id="456")
+        self.assertEqual(len(self.queue.current_queue), 2)
+
+    async def test_per_person_pending_request_limit_can_be_disabled(self):
+        self.store.save_settings({"queue_limit_per_person": 0})
+        await self.queue.request("First (Show)", "Viewer")
+        await self.queue.request("Second (Show)", "Viewer")
         self.assertEqual(len(self.queue.current_queue), 2)
 
     async def test_queue_closes_after_configured_number_of_new_requests(self):
@@ -95,8 +109,8 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.queue.current_queue, [])
 
     async def test_queue_items_can_be_moved_and_order_is_persisted(self):
-        for title in ("First (Show)", "Second (Show)", "Third (Show)"):
-            await self.queue.request(title, "Viewer")
+        for index, title in enumerate(("First (Show)", "Second (Show)", "Third (Show)")):
+            await self.queue.request(title, f"Viewer {index}")
         third_id = self.queue.current_queue[2]["id"]
         self.assertTrue(await self.queue.move(third_id, -1))
         self.assertEqual(

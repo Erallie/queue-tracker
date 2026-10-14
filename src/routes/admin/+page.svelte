@@ -10,7 +10,7 @@
 
   let tab = $state<'queue' | 'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('queue');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, default_artist: 'Erallie', queue_open: false, queue_close_after: 0, twitch_chat_enabled: true, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, queue_limit_per_person: 1, default_artist: 'Erallie', queue_open: false, queue_close_after: 0, twitch_chat_enabled: true, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let queue = $state<QueueItem[]>([]);
@@ -425,6 +425,7 @@
         <label>Days to retain recently graduated data<input type="number" min="0" bind:value={settings.recently_graduated_days} /></label>
         <label>Last-played dates retained per song<input type="number" min="1" bind:value={settings.last_played_history_limit} /></label>
         <label>Request cooldown after a performance (minutes)<input type="number" min="0" bind:value={settings.request_cooldown_minutes} /><small class="muted">Set to 0 to allow requests immediately.</small></label>
+        <label>Pending request limit per person<input type="number" min="0" bind:value={settings.queue_limit_per_person} /><small class="muted">Set to 0 for no limit. MustardMine currently uses 1.</small></label>
         <label>Default artist for songs without parentheses<input required bind:value={settings.default_artist} /></label>
         <label>Twitch request command<input bind:value={settings.twitch_request_command} /><small class="muted">Viewers type this followed by a song title.</small></label>
         <label>Twitch remove command<input bind:value={settings.twitch_remove_command} /><small class="muted">Viewers type this followed by their queue number.</small></label>

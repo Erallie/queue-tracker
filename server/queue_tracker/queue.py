@@ -15,6 +15,10 @@ class SongAlreadyQueuedError(RuntimeError):
     pass
 
 
+class QueueLimitError(RuntimeError):
+    pass
+
+
 class QueueClosedError(RuntimeError):
     pass
 
@@ -83,10 +87,22 @@ class QueueBridge:
             self.refresh()
             if not self.queue_open:
                 raise QueueClosedError("The request queue is closed")
-            if grouped_titles:
-                queued = {self._queue_title_key(item["title"]) for item in self.current_queue}
-                if any(self._queue_title_key(grouped_title) in queued for grouped_title in grouped_titles):
-                    raise SongAlreadyQueuedError("Song is already in the queue!")
+            queued = {self._queue_title_key(item["title"]) for item in self.current_queue}
+            requested_titles = {title, *(grouped_titles or [])}
+            if any(self._queue_title_key(requested_title) in queued for requested_title in requested_titles):
+                raise SongAlreadyQueuedError("Song is already in the queue!")
+            limit = max(0, int(self.store.settings()["queue_limit_per_person"]))
+            if limit and sum(
+                self._same_requester(
+                    item,
+                    request_name,
+                    user_id,
+                    requester_provider,
+                    requester_provider_id,
+                )
+                for item in self.current_queue
+            ) >= limit:
+                raise QueueLimitError("You already have requests pending.")
             self.store.enqueue(
                 title,
                 request_name,
@@ -135,6 +151,26 @@ class QueueBridge:
     @staticmethod
     def _queue_title_key(title: str) -> str:
         return " ".join(title.casefold().split())
+
+    @classmethod
+    def _same_requester(
+        cls,
+        item: dict[str, Any],
+        request_name: str,
+        user_id: str | None,
+        requester_provider: str,
+        requester_provider_id: str,
+    ) -> bool:
+        if user_id and item.get("user_id") == user_id:
+            return True
+        if (
+            requester_provider
+            and requester_provider_id
+            and item.get("requester_provider") == requester_provider
+            and item.get("requester_provider_id") == requester_provider_id
+        ):
+            return True
+        return cls._queue_title_key(str(item.get("user", ""))) == cls._queue_title_key(request_name)
 
 
 class TwitchChatBridge:
@@ -261,7 +297,7 @@ class TwitchChatBridge:
                     requester_provider="twitch",
                     requester_provider_id=requester_id,
                 )
-            except (QueueClosedError, SongAlreadyQueuedError):
+            except (QueueClosedError, QueueLimitError, SongAlreadyQueuedError):
                 return
         elif command == remove_command and argument.strip().isdigit():
             index = int(argument.strip()) - 1

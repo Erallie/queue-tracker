@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
     "recently_graduated_days": 7,
     "last_played_history_limit": 10,
     "request_cooldown_minutes": 0,
+    "queue_limit_per_person": 1,
     "default_artist": "Erallie",
     "queue_open": False,
     "queue_close_after": 0,
@@ -163,7 +164,7 @@ class Store:
             if key in values:
                 if key == "last_played_history_limit":
                     value = max(1, int(values[key]))
-                elif key in {"request_cooldown_minutes", "queue_close_after"}:
+                elif key in {"request_cooldown_minutes", "queue_limit_per_person", "queue_close_after"}:
                     value = max(0, int(values[key]))
                 elif key in {"queue_open", "twitch_chat_enabled"}:
                     value = bool(values[key])

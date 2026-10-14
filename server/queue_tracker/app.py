@@ -19,7 +19,7 @@ from .auth_errors import provider_auth_error, return_to_with_error
 from .catalog import split_name
 from .database import Store
 from .oauth import PROVIDERS, authorize_url, exchange, profile, refresh_twitch_token
-from .queue import QueueBridge, QueueClosedError, SongAlreadyQueuedError, TwitchChatBridge, hourly_maintenance
+from .queue import QueueBridge, QueueClosedError, QueueLimitError, SongAlreadyQueuedError, TwitchChatBridge, hourly_maintenance
 
 
 class Service:
@@ -377,6 +377,8 @@ fetch('/api/queue',{credentials:'include'}).then(r=>r.json()).then(render);const
         try:
             await self.queue.request(title, name, self.store.group_request_titles(song_id), user_id=user_id)
         except SongAlreadyQueuedError as error:
+            return web.json_response({"error": str(error)}, status=409)
+        except QueueLimitError as error:
             return web.json_response({"error": str(error)}, status=409)
         except QueueClosedError as error:
             return web.json_response({"error": str(error)}, status=409)

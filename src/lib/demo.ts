@@ -32,6 +32,7 @@ export const demoSettings: Settings = {
   recently_graduated_days: 7,
   last_played_history_limit: 10,
   request_cooldown_minutes: 0,
+  queue_limit_per_person: 1,
   default_artist: 'Erallie',
   queue_open: false,
   queue_close_after: 0,
