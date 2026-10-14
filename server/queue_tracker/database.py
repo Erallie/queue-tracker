@@ -38,6 +38,7 @@ DEFAULT_SETTINGS = {
     "request_cooldown_minutes": 0,
     "default_artist": "Erallie",
     "queue_open": False,
+    "queue_close_after": 0,
     "twitch_chat_enabled": True,
     "twitch_request_command": "!request",
     "twitch_remove_command": "!unchoose",
@@ -156,7 +157,7 @@ class Store:
             if key in values:
                 if key == "last_played_history_limit":
                     value = max(1, int(values[key]))
-                elif key == "request_cooldown_minutes":
+                elif key in {"request_cooldown_minutes", "queue_close_after"}:
                     value = max(0, int(values[key]))
                 elif key in {"queue_open", "twitch_chat_enabled"}:
                     value = bool(values[key])
@@ -573,7 +574,30 @@ class Store:
         return dict(row)
 
     def set_queue_open(self, open_: bool) -> None:
-        self.save_settings({"queue_open": bool(open_)})
+        self.set_queue_state(open_, 0)
+
+    def set_queue_state(self, open_: bool, close_after: int = 0) -> None:
+        values = {
+            "queue_open": bool(open_),
+            "queue_close_after": max(0, int(close_after)) if open_ else 0,
+        }
+        for key, value in values.items():
+            self.db.execute(
+                """INSERT INTO settings(key,value) VALUES(?,?)
+                   ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+                (key, json.dumps(value)),
+            )
+        self.db.commit()
+
+    def consume_queue_slot(self) -> tuple[bool, int]:
+        settings = self.settings()
+        open_ = bool(settings["queue_open"])
+        remaining = max(0, int(settings["queue_close_after"]))
+        if open_ and remaining:
+            remaining -= 1
+            open_ = remaining > 0
+            self.set_queue_state(open_, remaining)
+        return open_, remaining
 
     def user_for_identity(self, provider: str, provider_user_id: str) -> str | None:
         return self.identity_user(provider, provider_user_id)

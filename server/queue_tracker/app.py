@@ -16,6 +16,7 @@ from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
 from .auth_errors import provider_auth_error, return_to_with_error
+from .catalog import split_name
 from .database import Store
 from .oauth import PROVIDERS, authorize_url, exchange, profile, refresh_twitch_token
 from .queue import QueueBridge, QueueClosedError, SongAlreadyQueuedError, TwitchChatBridge, hourly_maintenance
@@ -243,33 +244,43 @@ class Service:
         html = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Erallie Request Queue</title><style>
-:root{color-scheme:dark;font-family:Montserrat,Arial,sans-serif;color:#fff}*{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:transparent}body{padding:10px}
-#status{font-size:18px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin:0 0 8px;text-shadow:0 2px 5px #000}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:#d95050;box-shadow:0 0 0 5px #d9505030}
-.open .dot{background:#1c9b58;box-shadow:0 0 0 5px #1c9b5830}
-#status span{display:inline;color:inherit;margin:0}
-ol{list-style:none;padding:0;margin:0;display:grid;gap:5px;counter-reset:item}
-li{counter-increment:item;display:grid;grid-template-columns:42px 1fr;align-items:center;min-height:62px;padding:9px 14px;background:#181412e8;border:1px solid #756b65}
-li:before{content:counter(item);font-size:25px;font-weight:700;color:#e95e58;text-align:center}
-strong,span{display:block}strong{font-size:22px;line-height:1.15}span{font-size:16px;color:#d2c9c3;margin-top:3px}
-.empty{padding:18px;background:#181412e8;border-left:3px solid #756b65;font-size:20px}
-</style></head><body><div id="status"><i class="dot"></i><span>Queue connecting</span></div><main></main>
+:root{color-scheme:dark;font-family:Arial,Helvetica,sans-serif;color:#efeff1;background:#0e0e10}*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#0e0e10}body{padding:8px 8px 74px;font-size:14px}
+#message{position:fixed;top:10px;right:10px;z-index:3;max-width:min(420px,calc(100vw - 20px));padding:10px 14px;background:#3a1f2b;color:#ff8da1;border:1px solid #7b3048;display:none}
+table{width:100%;border-collapse:collapse}th,td{padding:8px 6px;border-bottom:1px solid #2a2a2a;text-align:left}th{background:#1f1f23;font-weight:700}tbody tr:nth-child(even){background:#18181b}
+.position{width:8%}.song{width:18%}.origin{width:37%}.requester{width:22%}.actions{width:15%;white-space:nowrap;text-align:right}
+.action{border:0;border-radius:6px;padding:5px 9px;margin-left:5px;color:#fff;font-weight:700;cursor:pointer}.cancel{background:#3a1f2b;color:#ff6b86}.complete{background:#196c45}.action:disabled,#bottombar button:disabled{opacity:.5;cursor:wait}
+.placeholder td{height:34px;color:#777}
+#bottombar{position:fixed;z-index:2;bottom:12px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:12px;color:#efeff1}
+#bottombar button{font-weight:700;border:0;border-radius:8px;padding:9px 20px;cursor:pointer;color:#fff;background:#ad2626}#bottombar button.open{background:#1d7a4d}
+#closeafter{width:58px;height:26px;background:#fff;color:#111;border:1px solid #aaa;padding:2px 5px}
+@media(max-width:700px){.origin{width:25%}.requester{width:20%}.action{display:block;width:100%;margin:3px 0}.actions{white-space:normal}}
+</style></head><body><div id="message" role="alert"></div><main></main><div id="bottombar"></div>
 <script>
-const status=document.querySelector('#status'),label=status.querySelector('span'),main=document.querySelector('main');
-function render(data){status.classList.toggle('open',data.queue_open===true);label.textContent=data.queue_open===true?'Queue open':data.queue_open===false?'Queue closed':'Queue connecting';
-if(!data.queue.length){main.innerHTML='<div class="empty">The request queue is empty.</div>';return}
-const list=document.createElement('ol');for(const item of data.queue){const row=document.createElement('li'),text=document.createElement('div'),title=document.createElement('strong'),user=document.createElement('span');title.textContent=item.title;user.textContent='Requested by '+item.user;text.append(title,user);row.append(text);list.append(row)}main.replaceChildren(list)}
-fetch('/api/queue').then(r=>r.json()).then(render);const events=new EventSource('/api/queue/events');events.addEventListener('queue',event=>render(JSON.parse(event.data)));
+const main=document.querySelector('main'),bar=document.querySelector('#bottombar'),message=document.querySelector('#message');let lastData={queue:[],queue_open:null,close_after:0};
+function flash(text){message.textContent=text;message.style.display='block';clearTimeout(flash.timer);flash.timer=setTimeout(()=>message.style.display='none',5000)}
+async function api(path,options={}){const response=await fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...options});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Owner sign-in is required for that control.');return body}
+async function act(button,action){button.disabled=true;try{await action()}catch(error){flash(error.message)}finally{button.disabled=false}}
+function actionButton(label,className,handler){const button=document.createElement('button');button.type='button';button.className='action '+className;button.textContent=label;button.onclick=()=>act(button,handler);return button}
+function render(data){lastData=data;const table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody'),header=document.createElement('tr');
+for(const [label,className] of [['#','position'],['Song','song'],['Musical/Artist','origin'],['Requestor','requester'],['','actions']]){const th=document.createElement('th');th.textContent=label;th.className=className;header.append(th)}head.append(header);table.append(head);
+if(!data.queue.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=5;cell.textContent='No requests currently.';row.append(cell);body.append(row)}
+data.queue.forEach((item,index)=>{const row=document.createElement('tr');for(const value of [index+1,item.song||item.title,item.origin||'',item.user]){const cell=document.createElement('td');cell.textContent=value;row.append(cell)}const controls=document.createElement('td');controls.className='actions';controls.append(actionButton('Complete','complete',()=>api('/api/admin/queue/'+encodeURIComponent(item.id)+'/complete',{method:'POST'})),actionButton('Cancel','cancel',()=>api('/api/admin/queue/'+encodeURIComponent(item.id),{method:'DELETE'})));row.append(controls);body.append(row)});
+for(let index=0;index<(data.close_after||0);index++){const row=document.createElement('tr'),number=document.createElement('td'),blank=document.createElement('td');row.className='placeholder';number.textContent=data.queue.length+index+1;blank.colSpan=4;blank.innerHTML='&nbsp;';row.append(number,blank);body.append(row)}table.append(body);main.replaceChildren(table);renderBar(data)}
+function renderBar(data){bar.replaceChildren();if(data.queue_open){const button=document.createElement('button'),label=document.createElement('label'),input=document.createElement('input');button.textContent='Close Queue';input.id='closeafter';input.type='number';input.min='0';input.value=data.close_after||0;label.append('after ',input);button.onclick=()=>act(button,()=>api('/api/admin/queue/status',{method:'PUT',body:JSON.stringify({open:input.valueAsNumber>0,close_after:Math.max(0,input.valueAsNumber||0)})}));bar.append(button,label)}else{const button=document.createElement('button');button.textContent='Open Queue';button.className='open';button.onclick=()=>act(button,()=>api('/api/admin/queue/status',{method:'PUT',body:JSON.stringify({open:true})}));bar.append(button)}}
+fetch('/api/queue',{credentials:'include'}).then(r=>r.json()).then(render);const events=new EventSource('/api/queue/events',{withCredentials:true});events.addEventListener('queue',event=>render(JSON.parse(event.data)));
 </script></body></html>"""
         return web.Response(text=html, content_type="text/html")
 
     def queue_for_user(self, user_id: str | None, queue: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         snapshot = queue if queue is not None else self.queue.current_queue
+        default_artist = str(self.store.settings()["default_artist"])
         return [
             {
                 "id": item["id"],
                 "title": item["title"],
+                "song": split_name(item["title"])[0],
+                "origin": split_name(item["title"])[1] or default_artist,
                 "user": item["user"],
                 "can_remove": bool(user_id and self.store.queue_entry_owned_by(str(item["id"]), user_id)),
             }
@@ -277,7 +288,7 @@ fetch('/api/queue').then(r=>r.json()).then(render);const events=new EventSource(
         ]
 
     async def current_queue(self, request: web.Request) -> web.Response:
-        return web.json_response({"queue": self.queue_for_user(self.user_id(request)), "connected": self.queue.connected, "queue_open": self.queue.queue_open})
+        return web.json_response({"queue": self.queue_for_user(self.user_id(request)), "connected": self.queue.connected, "queue_open": self.queue.queue_open, "close_after": self.queue.close_after})
 
     async def queue_events(self, request: web.Request) -> web.StreamResponse:
         headers = {
@@ -300,7 +311,7 @@ fetch('/api/queue').then(r=>r.json()).then(render);const events=new EventSource(
             while True:
                 try:
                     queue = await asyncio.wait_for(listener.get(), timeout=20)
-                    payload = {"queue": self.queue_for_user(self.user_id(request), queue), "connected": self.queue.connected, "queue_open": self.queue.queue_open}
+                    payload = {"queue": self.queue_for_user(self.user_id(request), queue), "connected": self.queue.connected, "queue_open": self.queue.queue_open, "close_after": self.queue.close_after}
                     await response.write(f"event: queue\ndata: {json.dumps(payload)}\n\n".encode())
                 except TimeoutError:
                     await response.write(b": keepalive\n\n")
@@ -378,8 +389,9 @@ fetch('/api/queue').then(r=>r.json()).then(render);const events=new EventSource(
     async def set_queue_status(self, request: web.Request) -> web.Response:
         self.require_admin(request)
         body = await self.json(request)
-        await self.queue.set_open(bool(body.get("open")))
-        return web.json_response({"open": self.queue.queue_open})
+        close_after = max(0, int(body.get("close_after") or 0))
+        await self.queue.set_open(bool(body.get("open")), close_after)
+        return web.json_response({"open": self.queue.queue_open, "close_after": self.queue.close_after})
 
     async def admin_remove_queue_item(self, request: web.Request) -> web.Response:
         self.require_admin(request)

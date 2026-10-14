@@ -38,6 +38,7 @@ export type QueueState = {
   queue: QueueItem[];
   connected: boolean;
   queue_open: boolean | null;
+  close_after?: number;
 };
 
 export type Settings = {
@@ -49,6 +50,7 @@ export type Settings = {
   request_cooldown_minutes: number;
   default_artist: string;
   queue_open: boolean;
+  queue_close_after: number;
   twitch_chat_enabled: boolean;
   twitch_request_command: string;
   twitch_remove_command: string;

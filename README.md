@@ -45,7 +45,7 @@ The session cookie is HTTP-only, Secure, and SameSite=None so it works between G
 
 The default Twitch commands are `!request Song Title` and `!unchoose 2`. Both command names can be changed in the dashboard Settings tab. A title must resolve to exactly one song. A removal only succeeds when that Twitch account owns the selected queue entry.
 
-Use `https://YOUR_API_HOST/queue?panel` as an OBS Browser Source. The panel has a transparent background and updates in place through the same live event stream as the website.
+Use `https://YOUR_API_HOST/queue?panel` as an OBS Browser Source. The panel follows the previous MustardMine panel layout and updates in place through the same live event stream as the website. When opened in a browser with the owner session, it can open or close the queue immediately, close it after a chosen number of additional requests, cancel individual requests, or complete them. OBS can display the queue without being signed in.
 
 ## GitHub Pages
 

@@ -10,7 +10,7 @@
 
   let tab = $state<'queue' | 'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('queue');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, default_artist: 'Erallie', queue_open: false, twitch_chat_enabled: true, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, default_artist: 'Erallie', queue_open: false, queue_close_after: 0, twitch_chat_enabled: true, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let queue = $state<QueueItem[]>([]);
@@ -32,6 +32,7 @@
     const stopQueue = watchQueue((state) => {
       queue = state.queue;
       if (state.queue_open !== null) settings.queue_open = state.queue_open;
+      settings.queue_close_after = state.close_after || 0;
     });
     return () => { window.clearInterval(timer); stopQueue(); };
   });

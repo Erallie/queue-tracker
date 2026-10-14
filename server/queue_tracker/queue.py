@@ -26,6 +26,7 @@ class QueueBridge:
         self.store = store
         self.current_queue: list[dict[str, Any]] = []
         self.queue_open = bool(store.settings()["queue_open"])
+        self.close_after = max(0, int(store.settings()["queue_close_after"]))
         self.listeners: set[asyncio.Queue[list[dict[str, Any]]]] = set()
         self.connected = True
         self._lock = asyncio.Lock()
@@ -38,7 +39,9 @@ class QueueBridge:
 
     def refresh(self) -> None:
         self.current_queue = self.store.queue_entries()
-        self.queue_open = bool(self.store.settings()["queue_open"])
+        settings = self.store.settings()
+        self.queue_open = bool(settings["queue_open"])
+        self.close_after = max(0, int(settings["queue_close_after"]))
         self._publish_queue()
 
     def subscribe(self) -> asyncio.Queue[list[dict[str, Any]]]:
@@ -57,11 +60,14 @@ class QueueBridge:
                 listener.get_nowait()
             listener.put_nowait(snapshot)
 
-    async def set_open(self, open_: bool) -> None:
+    async def set_open(self, open_: bool, close_after: int = 0) -> None:
         async with self._lock:
-            self.store.set_queue_open(open_)
+            self.store.set_queue_state(open_, close_after)
             self.refresh()
-        logging.info("Request queue is now %s", "open" if open_ else "closed")
+        if close_after:
+            logging.info("Request queue will close after %d more request(s)", close_after)
+        else:
+            logging.info("Request queue is now %s", "open" if open_ else "closed")
 
     async def request(
         self,
@@ -88,6 +94,7 @@ class QueueBridge:
                 requester_provider=requester_provider,
                 requester_provider_id=requester_provider_id,
             )
+            self.store.consume_queue_slot()
             self.refresh()
         logging.info("Queued %r on behalf of %r", title, request_name)
 

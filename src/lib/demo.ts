@@ -34,6 +34,7 @@ export const demoSettings: Settings = {
   request_cooldown_minutes: 0,
   default_artist: 'Erallie',
   queue_open: false,
+  queue_close_after: 0,
   twitch_chat_enabled: true,
   twitch_request_command: '!request',
   twitch_remove_command: '!unchoose'

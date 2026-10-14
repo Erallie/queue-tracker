@@ -51,6 +51,15 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         await self.queue.request("Song (Show)", "Two")
         self.assertEqual(len(self.queue.current_queue), 2)
 
+    async def test_queue_closes_after_configured_number_of_new_requests(self):
+        await self.queue.set_open(True, 2)
+        await self.queue.request("First (Show)", "One")
+        self.assertTrue(self.queue.queue_open)
+        self.assertEqual(self.queue.close_after, 1)
+        await self.queue.request("Second (Show)", "Two")
+        self.assertFalse(self.queue.queue_open)
+        self.assertEqual(self.queue.close_after, 0)
+
     async def test_complete_removes_and_records_play(self):
         song = next(item for item in self.store.catalog()["songs"] if item["title"] == "Pandemonium")
         title = self.store.request_title(song["id"])
