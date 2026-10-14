@@ -107,11 +107,14 @@ class QueueBridge:
             if current["title"] != expected_title or current["user"] != expected_user:
                 raise RuntimeError("The request queue changed; please try again")
             self.store.remove_queue_entry(str(current["id"]))
+            self.store.restore_queue_slot()
             self.refresh()
 
     async def remove_by_id(self, entry_id: str) -> dict[str, Any] | None:
         async with self._lock:
             removed = self.store.remove_queue_entry(entry_id)
+            if removed:
+                self.store.restore_queue_slot()
             self.refresh()
             return removed
 

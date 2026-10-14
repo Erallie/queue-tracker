@@ -39,6 +39,7 @@ DEFAULT_SETTINGS = {
     "default_artist": "Erallie",
     "queue_open": False,
     "queue_close_after": 0,
+    "queue_auto_closed": False,
     "twitch_chat_enabled": True,
     "twitch_request_command": "!request",
     "twitch_remove_command": "!unchoose",
@@ -621,10 +622,17 @@ class Store:
     def set_queue_open(self, open_: bool) -> None:
         self.set_queue_state(open_, 0)
 
-    def set_queue_state(self, open_: bool, close_after: int = 0) -> None:
+    def set_queue_state(
+        self,
+        open_: bool,
+        close_after: int = 0,
+        *,
+        auto_closed: bool = False,
+    ) -> None:
         values = {
             "queue_open": bool(open_),
             "queue_close_after": max(0, int(close_after)) if open_ else 0,
+            "queue_auto_closed": bool(auto_closed and not open_),
         }
         for key, value in values.items():
             self.db.execute(
@@ -641,7 +649,20 @@ class Store:
         if open_ and remaining:
             remaining -= 1
             open_ = remaining > 0
-            self.set_queue_state(open_, remaining)
+            self.set_queue_state(open_, remaining, auto_closed=not open_)
+        return open_, remaining
+
+    def restore_queue_slot(self) -> tuple[bool, int]:
+        settings = self.settings()
+        open_ = bool(settings["queue_open"])
+        remaining = max(0, int(settings["queue_close_after"]))
+        auto_closed = bool(settings["queue_auto_closed"])
+        if open_ and remaining:
+            remaining += 1
+            self.set_queue_state(True, remaining)
+        elif not open_ and auto_closed:
+            open_, remaining = True, 1
+            self.set_queue_state(True, remaining)
         return open_, remaining
 
     def user_for_identity(self, provider: str, provider_user_id: str) -> str | None:

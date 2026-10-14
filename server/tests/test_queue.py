@@ -60,6 +60,30 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.queue.queue_open)
         self.assertEqual(self.queue.close_after, 0)
 
+    async def test_cancelling_restores_an_automatic_close_slot(self):
+        await self.queue.set_open(True, 2)
+        await self.queue.request("First (Show)", "One")
+        first_id = self.queue.current_queue[0]["id"]
+        await self.queue.remove_by_id(first_id)
+        self.assertTrue(self.queue.queue_open)
+        self.assertEqual(self.queue.close_after, 2)
+
+        await self.queue.request("Second (Show)", "Two")
+        await self.queue.request("Third (Show)", "Three")
+        self.assertFalse(self.queue.queue_open)
+        third_id = self.queue.current_queue[-1]["id"]
+        await self.queue.remove_by_id(third_id)
+        self.assertTrue(self.queue.queue_open)
+        self.assertEqual(self.queue.close_after, 1)
+
+    async def test_completing_does_not_restore_an_automatic_close_slot(self):
+        await self.queue.set_open(True, 1)
+        await self.queue.request("Song (Show)", "Viewer")
+        entry_id = self.queue.current_queue[0]["id"]
+        await self.queue.complete(entry_id)
+        self.assertFalse(self.queue.queue_open)
+        self.assertEqual(self.queue.close_after, 0)
+
     async def test_complete_removes_and_records_play(self):
         song = next(item for item in self.store.catalog()["songs"] if item["title"] == "Pandemonium")
         title = self.store.request_title(song["id"])
