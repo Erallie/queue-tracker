@@ -54,7 +54,7 @@ export function watchQueue(update: (state: QueueState) => void): () => void {
 
 export async function getAdmin(): Promise<{ settings: Settings; groups: SongGroup[]; catalog: Catalog; queue: QueueItem[] }> {
   if (!api) return { settings: demoSettings, groups: demoGroups, catalog: demoCatalog, queue: [] };
-  return request('/api/admin');
+  return request('/api/admin', { cache: 'no-store' });
 }
 
 export function authUrl(provider: string, mode = 'login'): string {
@@ -79,7 +79,7 @@ export async function unlink(provider: string): Promise<{ account_deleted: boole
   announceAccountChange();
   return result;
 }
-export async function saveSettings(settings: Settings): Promise<void> { await request('/api/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }); }
+export async function saveSettings(settings: Partial<Settings>): Promise<void> { await request('/api/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }); }
 export async function saveGroups(groups: SongGroup[]): Promise<void> { await request('/api/admin/groups', { method: 'PUT', body: JSON.stringify({ groups }) }); }
 export async function saveTags(tags: Catalog['tags']): Promise<void> { await request('/api/admin/tags', { method: 'PUT', body: JSON.stringify({ tags }) }); }
 export async function saveSongTags(songId: string, tags: string[]): Promise<void> { await request(`/api/admin/songs/${songId}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }); }

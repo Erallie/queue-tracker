@@ -92,6 +92,50 @@
     return Date.parse(b.last_played) - Date.parse(a.last_played);
   }
 
+  type SettingsRefresh = 'none' | 'all' | 'songText' | 'exceptSongText';
+  type DashboardRefreshOptions = {
+    settings?: SettingsRefresh;
+    groups?: boolean;
+    catalog?: boolean;
+    queue?: boolean;
+    preserveTrackerOrder?: boolean;
+  };
+
+  function applyCatalog(nextCatalog: Catalog, preserveTrackerOrder = false) {
+    if (preserveTrackerOrder) {
+      const available = new Set(nextCatalog.songs.map((song) => song.id));
+      const retained = trackerOrderIds.filter((id) => available.has(id));
+      const retainedSet = new Set(retained);
+      const additions = [...nextCatalog.songs]
+        .sort(compareTrackerSongs)
+        .map((song) => song.id)
+        .filter((id) => !retainedSet.has(id));
+      trackerOrderIds = [...retained, ...additions];
+    } else {
+      trackerOrderIds = [...nextCatalog.songs].sort(compareTrackerSongs).map((song) => song.id);
+    }
+    catalog = nextCatalog;
+  }
+
+  async function refreshDashboard({
+    settings: settingsRefresh = 'none',
+    groups: refreshGroups = false,
+    catalog: refreshCatalog = false,
+    queue: refreshQueue = false,
+    preserveTrackerOrder = false
+  }: DashboardRefreshOptions = {}) {
+    const next = await getAdmin();
+    if (settingsRefresh === 'all') settings = next.settings;
+    else if (settingsRefresh === 'songText') settings.song_text = next.settings.song_text;
+    else if (settingsRefresh === 'exceptSongText') {
+      const songText = settings.song_text;
+      settings = { ...next.settings, song_text: songText };
+    }
+    if (refreshGroups) groups = next.groups;
+    if (refreshCatalog) applyCatalog(next.catalog, preserveTrackerOrder);
+    if (refreshQueue) queue = next.queue;
+  }
+
   const trackedSongs = $derived.by(() => {
     const needle = normalizeSearch(trackerQuery.trim());
     const positions = new Map(trackerOrderIds.map((id, index) => [id, index]));
@@ -177,6 +221,39 @@
     finally { saving = false; }
   }
 
+  async function saveSongList() {
+    await saveSettings({ song_text: settings.song_text });
+    await refreshDashboard({ settings: 'songText', catalog: true });
+  }
+
+  async function saveSongGroups() {
+    await saveGroups(groups);
+    await refreshDashboard({ groups: true, catalog: true });
+  }
+
+  async function saveTagGroups() {
+    await saveTags(catalog.tags);
+    await refreshDashboard({ catalog: true });
+  }
+
+  async function saveAllSongTags() {
+    await Promise.all(catalog.songs.map((song) => saveSongTags(song.id, song.tags)));
+    await refreshDashboard({ catalog: true });
+  }
+
+  async function saveTrackingSettings() {
+    const { song_text: _songText, ...trackingSettings } = settings;
+    await saveSettings(trackingSettings);
+    await refreshDashboard({ settings: 'exceptSongText', catalog: true });
+  }
+
+  async function changePlay(song: Song, delta: -1 | 1) {
+    await runSave(async () => {
+      await adjustPlay(song.id, delta);
+      await refreshDashboard({ catalog: true, preserveTrackerOrder: true });
+    }, `${song.title} play count updated`);
+  }
+
   function addGroup() { groups = [...groups, { display_name: '', members: [] }]; }
   function addGroupMember(group: SongGroup, groupIndex: number, rawTitle: string) {
     if (!group.members.includes(rawTitle)) group.members = [...group.members, rawTitle];
@@ -217,7 +294,7 @@
     removingNew = songId; status = ''; error = '';
     try {
       await removeNewTag(songId);
-      ({ settings, groups, catalog } = await getAdmin());
+      await refreshDashboard({ settings: 'songText', catalog: true });
       status = 'New tag removed';
     } catch (caught) {
       error = caught instanceof Error ? caught.message : 'Could not remove the New tag';
@@ -230,14 +307,18 @@
     const open = !settings.queue_open;
     await setQueueOpen(open);
     settings.queue_open = open;
+    settings.queue_close_after = 0;
   }
 
   onMount(async () => {
     me = await getAccount();
     if (me.is_admin) {
       try {
-        ({ settings, groups, catalog, queue } = await getAdmin());
-        trackerOrderIds = [...catalog.songs].sort(compareTrackerSongs).map((song) => song.id);
+        const initial = await getAdmin();
+        settings = initial.settings;
+        groups = initial.groups;
+        queue = initial.queue;
+        applyCatalog(initial.catalog);
       } catch (caught) {
         error = caught instanceof Error ? caught.message : 'Could not open the owner dashboard';
       }
@@ -278,14 +359,14 @@
       {:else}
         <div class="table-wrap"><table><thead><tr><th>#</th><th>Song</th><th>Requested by</th><th>Actions</th></tr></thead><tbody>
           {#each queue as item, index (item.id)}
-            <tr><td>{index + 1}</td><td><span class="song-title">{item.title}</span></td><td>{item.user}</td><td><div class="actions"><button class="button small green" onclick={() => runSave(() => completeQueueItem(item.id), `${item.title} marked as performed`)}>Complete</button><button class="button small secondary" onclick={() => runSave(() => adminRemoveQueueItem(item.id), `${item.title} removed`)}>Remove</button></div></td></tr>
+            <tr><td>{index + 1}</td><td><span class="song-title">{item.title}</span></td><td>{item.user}</td><td><div class="actions"><button class="button small green" onclick={() => runSave(async () => { await completeQueueItem(item.id); await refreshDashboard({ catalog: true, queue: true }); }, `${item.title} marked as performed`)}>Complete</button><button class="button small secondary" onclick={() => runSave(async () => { await adminRemoveQueueItem(item.id); await refreshDashboard({ queue: true }); }, `${item.title} removed`)}>Remove</button></div></td></tr>
           {/each}
         </tbody></table></div>
       {/if}
     {:else if tab === 'songs'}
       <div class="section-heading"><div><h2>Editable song list</h2><p class="muted">Keep the same heading and one-song-per-line format. Adding or removing <code>[New]</code> updates tracking immediately.</p></div></div>
       <MarkdownEditor bind:value={settings.song_text} />
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveSettings(settings); ({ settings, groups, catalog } = await getAdmin()); }, 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(saveSongList, 'Song list saved')}>Save song list</button><button class="button secondary" onclick={() => copyText(false)}>Copy exact text</button><button class="button secondary" onclick={() => copyText(true)}>Copy cleaned text</button></div>
       <nav class="editor-destinations" aria-label="Places to update the song list">
         <span class="muted">Update the published song list:</span>
         <a class="external-inline-link" href="https://www.twitch.tv/erallie/about" target="_blank" rel="noopener noreferrer">
@@ -341,7 +422,7 @@
           </div>
         {/each}
       </div>
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(async () => { await saveGroups(groups); ({ settings, groups, catalog } = await getAdmin()); }, 'Song groups saved')}>Save groups</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(saveSongGroups, 'Song groups saved')}>Save groups</button></div>
     {:else if tab === 'tags'}
       <div class="section-heading"><div><h2>Tags and ranking points</h2><p class="muted">Use the arrows to choose the order tags appear. Higher point totals rank songs first, while New songs always stay above every other song.</p></div><button class="button secondary small" onclick={addTag}>Add tag</button></div>
       <div class="stack">
@@ -362,7 +443,7 @@
           </div>
         {/each}
       </div>
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveTags(catalog.tags), 'Tag groups saved')}>Save tag groups</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(saveTagGroups, 'Tag groups saved')}>Save tag groups</button></div>
       <h3 style="margin-top:2rem">Assign tags to songs</h3>
       <p class="muted">For a grouped song, the selected tags are applied to every member song.</p>
       <div class="toolbar">
@@ -386,7 +467,7 @@
           {/each}
         </tbody></table></div>
       {/if}
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => Promise.all(catalog.songs.map((song) => saveSongTags(song.id, song.tags))).then(() => undefined), 'Song tags saved')}>Save song tags</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(saveAllSongTags, 'Song tags saved')}>Save song tags</button></div>
     {:else if tab === 'tracker'}
       <div class="section-heading"><div><h2>All songs</h2><p class="muted">Every song in the current song list appears here, whether or not it is New. Queue removals update automatically; same-song groups share one combined count.</p></div></div>
       <div class="toolbar">
@@ -411,7 +492,7 @@
               <td><div class="tag-list">{#each song.tags as tag}<span class="tag" style={tagVisualStyle(tagColors[tag] || '#ab212a')}>{tag}</span>{/each}</div></td>
               <td>{relativeTime(song.last_played, clock)}</td>
               <td class="number">{song.play_count}</td>
-              <td><div class="actions tracker-actions"><button class="button secondary small decrease-play" aria-label={`Decrease plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, -1); Object.assign(song, result.song); }}>−</button><button class="button small increase-play" aria-label={`Increase plays for ${song.title}`} onclick={async () => { const result = await adjustPlay(song.id, 1); Object.assign(song, result.song); }}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
+              <td><div class="actions tracker-actions"><button class="button secondary small decrease-play" disabled={saving} aria-label={`Decrease plays for ${song.title}`} onclick={() => changePlay(song, -1)}>−</button><button class="button small increase-play" disabled={saving} aria-label={`Increase plays for ${song.title}`} onclick={() => changePlay(song, 1)}>+</button>{#if song.is_new}<button class="button secondary small remove-new" disabled={removingNew === song.id || saving} onclick={() => manuallyRemoveNew(song.id)}>{removingNew === song.id ? 'Removing…' : 'Remove New'}</button>{/if}</div></td>
             </tr>
           {/each}
         </tbody></table></div>
@@ -433,7 +514,7 @@
         <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_announce_queue_status} /> Announce when the queue opens or closes</label>
         <p class="muted">Sign out and sign back in with the owner Twitch account once after this update to grant permission to send chat messages.</p>
       </div>
-      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Settings saved')}>Save settings</button></div>
+      <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(saveTrackingSettings, 'Settings saved')}>Save settings</button></div>
     {/if}
     </section>
   {/if}
