@@ -11,7 +11,7 @@
 
   let tab = $state<'queue' | 'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('queue');
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
-  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, queue_limit_per_person: 1, default_artist: 'Erallie', queue_open: false, queue_close_after: 0, twitch_chat_enabled: true, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
+  let settings = $state<Settings>({ song_text: '', new_play_threshold: 2, new_min_days: 14, recently_graduated_days: 7, last_played_history_limit: 10, request_cooldown_minutes: 0, queue_limit_per_person: 1, default_artist: 'Erallie', queue_open: false, queue_close_after: 0, twitch_chat_enabled: true, twitch_announce_requests: false, twitch_announce_queue_status: false, twitch_request_command: '!request', twitch_remove_command: '!unchoose' });
   let groups = $state<SongGroup[]>([]);
   let catalog = $state<Catalog>({ songs: [], tags: [] });
   let queue = $state<QueueItem[]>([]);
@@ -429,6 +429,9 @@
         <label>Twitch request command<input bind:value={settings.twitch_request_command} /><small class="muted">Viewers type this followed by a song title.</small></label>
         <label>Twitch remove command<input bind:value={settings.twitch_remove_command} /><small class="muted">Viewers type this followed by their queue number.</small></label>
         <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_chat_enabled} /> Accept Twitch chat commands</label>
+        <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_announce_requests} /> Announce new song requests in Twitch chat</label>
+        <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_announce_queue_status} /> Announce when the queue opens or closes</label>
+        <p class="muted">Sign out and sign back in with the owner Twitch account once after this update to grant permission to send chat messages.</p>
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(() => saveSettings(settings), 'Settings saved')}>Save settings</button></div>
     {/if}

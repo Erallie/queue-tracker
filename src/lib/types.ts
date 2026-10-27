@@ -53,6 +53,8 @@ export type Settings = {
   queue_open: boolean;
   queue_close_after: number;
   twitch_chat_enabled: boolean;
+  twitch_announce_requests: boolean;
+  twitch_announce_queue_status: boolean;
   twitch_request_command: string;
   twitch_remove_command: string;
 };

@@ -42,6 +42,8 @@ DEFAULT_SETTINGS = {
     "queue_close_after": 0,
     "queue_auto_closed": False,
     "twitch_chat_enabled": True,
+    "twitch_announce_requests": False,
+    "twitch_announce_queue_status": False,
     "twitch_request_command": "!request",
     "twitch_remove_command": "!unchoose",
 }
@@ -166,7 +168,12 @@ class Store:
                     value = max(1, int(values[key]))
                 elif key in {"request_cooldown_minutes", "queue_limit_per_person", "queue_close_after"}:
                     value = max(0, int(values[key]))
-                elif key in {"queue_open", "twitch_chat_enabled"}:
+                elif key in {
+                    "queue_open",
+                    "twitch_chat_enabled",
+                    "twitch_announce_requests",
+                    "twitch_announce_queue_status",
+                }:
                     value = bool(values[key])
                 elif key in {"twitch_request_command", "twitch_remove_command"}:
                     value = str(values[key]).strip() or str(DEFAULT_SETTINGS[key])

@@ -34,6 +34,8 @@ class QueueBridge:
         self.listeners: set[asyncio.Queue[list[dict[str, Any]]]] = set()
         self.connected = True
         self._lock = asyncio.Lock()
+        self.on_request_added: Callable[[str, str], None] | None = None
+        self.on_open_changed: Callable[[bool], None] | None = None
 
     async def start(self) -> None:
         self.refresh()
@@ -66,8 +68,11 @@ class QueueBridge:
 
     async def set_open(self, open_: bool, close_after: int = 0) -> None:
         async with self._lock:
+            self.refresh()
+            was_open = self.queue_open
             self.store.set_queue_state(open_, close_after)
             self.refresh()
+        self._notify_open_change(was_open)
         if close_after:
             logging.info("Request queue will close after %d more request(s)", close_after)
         else:
@@ -85,6 +90,7 @@ class QueueBridge:
     ) -> None:
         async with self._lock:
             self.refresh()
+            was_open = self.queue_open
             if not self.queue_open:
                 raise QueueClosedError("The request queue is closed")
             queued = {self._queue_title_key(item["title"]) for item in self.current_queue}
@@ -112,11 +118,14 @@ class QueueBridge:
             )
             self.store.consume_queue_slot()
             self.refresh()
+        self._notify_request_added(title, request_name)
+        self._notify_open_change(was_open)
         logging.info("Queued %r on behalf of %r", title, request_name)
 
     async def remove(self, index: int, expected_title: str, expected_user: str) -> None:
         async with self._lock:
             self.refresh()
+            was_open = self.queue_open
             if index < 0 or index >= len(self.current_queue):
                 raise RuntimeError("That request is no longer in the queue")
             current = self.current_queue[index]
@@ -125,14 +134,33 @@ class QueueBridge:
             self.store.remove_queue_entry(str(current["id"]))
             self.store.restore_queue_slot()
             self.refresh()
+        self._notify_open_change(was_open)
 
     async def remove_by_id(self, entry_id: str) -> dict[str, Any] | None:
         async with self._lock:
+            self.refresh()
+            was_open = self.queue_open
             removed = self.store.remove_queue_entry(entry_id)
             if removed:
                 self.store.restore_queue_slot()
             self.refresh()
-            return removed
+        self._notify_open_change(was_open)
+        return removed
+
+    def _notify_request_added(self, title: str, request_name: str) -> None:
+        if self.on_request_added:
+            try:
+                self.on_request_added(title, request_name)
+            except Exception:
+                logging.exception("Could not schedule Twitch request announcement")
+
+    def _notify_open_change(self, was_open: bool) -> None:
+        if was_open == self.queue_open or not self.on_open_changed:
+            return
+        try:
+            self.on_open_changed(self.queue_open)
+        except Exception:
+            logging.exception("Could not schedule Twitch queue-status announcement")
 
     async def complete(self, entry_id: str) -> dict[str, Any] | None:
         async with self._lock:
@@ -191,12 +219,19 @@ class TwitchChatBridge:
         self.session: aiohttp.ClientSession | None = None
         self.seen_message_ids: set[str] = set()
         self.connected = False
+        self.message_tasks: set[asyncio.Task[None]] = set()
+        self.send_lock = asyncio.Lock()
 
     async def start(self) -> None:
         if self.client_id and self.broadcaster_id and (not self.task or self.task.done()):
             self.task = asyncio.create_task(self._run(), name="twitch-chat")
 
     async def close(self) -> None:
+        message_tasks = list(self.message_tasks)
+        for task in message_tasks:
+            task.cancel()
+        if message_tasks:
+            await asyncio.gather(*message_tasks, return_exceptions=True)
         if self.task:
             self.task.cancel()
             try:
@@ -206,6 +241,47 @@ class TwitchChatBridge:
             self.task = None
         if self.session and not self.session.closed:
             await self.session.close()
+
+    def announce_request(self, title: str, request_name: str) -> None:
+        if self.store.settings()["twitch_announce_requests"]:
+            self._schedule_message(f"{request_name} added {title} to the request queue.")
+
+    def announce_queue_status(self, open_: bool) -> None:
+        if self.store.settings()["twitch_announce_queue_status"]:
+            self._schedule_message(f"The request queue is now {'open' if open_ else 'closed'}.")
+
+    def _schedule_message(self, message: str) -> None:
+        task = asyncio.create_task(self._send_message(message), name="twitch-chat-announcement")
+        self.message_tasks.add(task)
+        task.add_done_callback(self.message_tasks.discard)
+
+    async def _send_message(self, message: str) -> None:
+        try:
+            token = await self.token_provider()
+            if not self.session or self.session.closed:
+                self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Client-Id": self.client_id,
+                "Content-Type": "application/json",
+            }
+            body = {
+                "broadcaster_id": self.broadcaster_id,
+                "sender_id": self.broadcaster_id,
+                "message": message,
+            }
+            async with self.send_lock:
+                async with self.session.post(
+                    "https://api.twitch.tv/helix/chat/messages", headers=headers, json=body
+                ) as response:
+                    result = await response.json(content_type=None)
+                    sent = bool(result.get("data") and result["data"][0].get("is_sent"))
+                    if response.status >= 400 or not sent:
+                        raise RuntimeError(f"Twitch chat message failed ({response.status}): {result}")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("Could not send Twitch chat announcement")
 
     async def _run(self) -> None:
         delay = 2

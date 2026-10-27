@@ -32,6 +32,22 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(update[0]["user"], "Viewer")
         self.assertEqual(self.store.queue_entries()[0]["user_id"], site_user)
 
+    async def test_request_and_queue_state_callbacks_cover_automatic_changes(self):
+        requests = []
+        states = []
+        self.queue.on_request_added = lambda title, name: requests.append((title, name))
+        self.queue.on_open_changed = states.append
+
+        await self.queue.set_open(False)
+        await self.queue.set_open(True, 1)
+        await self.queue.request("Song (Show)", "Viewer")
+
+        self.assertEqual(requests, [("Song (Show)", "Viewer")])
+        self.assertEqual(states, [False, True, False])
+
+        await self.queue.remove_by_id(self.queue.current_queue[0]["id"])
+        self.assertEqual(states, [False, True, False, True])
+
     async def test_closed_queue_rejects_requests(self):
         await self.queue.set_open(False)
         with self.assertRaisesRegex(QueueClosedError, "closed"):

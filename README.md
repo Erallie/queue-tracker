@@ -13,6 +13,7 @@ A lightweight Svelte/TypeScript song-request site with a Python service for the 
 - Owner dashboard for queue controls, the source song text, same-song groups, tags and ranking points, manual play corrections, and queue settings.
 - Persistent self-hosted request queue with live website updates and an OBS-ready transparent panel.
 - Twitch chat requests and removals through configurable commands.
+- Optional Twitch chat announcements for new requests and queue open/close changes.
 - Hourly New-song eligibility checks. A song graduates only after both its play threshold and minimum age are reached.
 - No generated `# New Songs` section is added to copied or editable text.
 
@@ -33,7 +34,7 @@ Requires Python 3.11 or newer.
 3. Put the broadcaster Twitch ID in `OWNER_IDENTITIES` as `twitch:YOUR_TWITCH_ID`.
 4. Run `python -m queue_tracker`.
 5. Point a Cloudflare Tunnel hostname at `http://127.0.0.1:8787`. Examples for cloudflared and systemd are in `server/deploy`.
-6. Sign out and back in with the owner Twitch account once after deploying. Twitch will ask for chat-read access, which lets the service receive request commands. No MustardMine cookie is used.
+6. Sign out and back in with the owner Twitch account once after deploying. Twitch will ask for chat read/write access, which lets the service receive request commands and send enabled queue announcements. No MustardMine cookie is used.
 
 OAuth callback URLs:
 

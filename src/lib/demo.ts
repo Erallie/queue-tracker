@@ -37,6 +37,8 @@ export const demoSettings: Settings = {
   queue_open: false,
   queue_close_after: 0,
   twitch_chat_enabled: true,
+  twitch_announce_requests: false,
+  twitch_announce_queue_status: false,
   twitch_request_command: '!request',
   twitch_remove_command: '!unchoose'
 };

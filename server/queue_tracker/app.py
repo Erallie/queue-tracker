@@ -45,6 +45,8 @@ class Service:
             twitch_owner,
             self.twitch_chat_token,
         )
+        self.queue.on_request_added = self.twitch_chat.announce_request
+        self.queue.on_open_changed = self.twitch_chat.announce_queue_status
         self.event_tasks: set[asyncio.Task[Any]] = set()
         self.catalog_listeners: set[asyncio.Queue[dict[str, Any]]] = set()
         self.store.on_catalog_changed = self.publish_catalog
