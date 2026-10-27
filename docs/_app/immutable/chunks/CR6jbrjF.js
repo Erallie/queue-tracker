@@ -1,0 +1,1 @@
+import{a as o,b as s}from"./D-ns9CNR.js";import"./DPhfKcOp.js";var e=s('<svg class="external-nav-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 12 12 4M6 4h6v6"></path></svg>');function n(a){var r=e();o(a,r)}export{n as E};

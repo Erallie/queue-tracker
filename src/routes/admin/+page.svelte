@@ -6,6 +6,7 @@
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
   import MarkdownEditor from '$lib/MarkdownEditor.svelte';
+  import NotificationToast from '$lib/NotificationToast.svelte';
   import type { Account, Catalog, QueueItem, Settings, Song, SongGroup } from '$lib/types';
 
   let tab = $state<'queue' | 'songs' | 'groups' | 'tags' | 'tracker' | 'settings'>('queue');
@@ -165,6 +166,7 @@
   async function copyText(cleaned: boolean) {
     const text = cleaned ? cleanForCopy(settings.song_text) : settings.song_text;
     await navigator.clipboard.writeText(addNewSongsSection(text, settings.song_text));
+    error = '';
     status = cleaned ? 'Cleaned song text copied' : 'Editable song text copied';
   }
 
@@ -254,9 +256,6 @@
   {#if !me.is_admin}
     <section class="panel"><h2>Owner access only</h2><p class="muted">Sign in on the Account page with Erallie's owner account to open the song-text editor, copy tools, groups, tags, play history, and settings.</p></section>
   {:else}
-    {#if status}<div class="notice success" role="status">{status}</div>{/if}
-    {#if error}<div class="notice error" role="alert">{error}</div>{/if}
-
     <div class="metric-row">
     <div class="metric"><span class="muted">Songs</span><strong>{catalog.songs.length}</strong></div>
     <div class="metric"><span class="muted">New</span><strong>{catalog.songs.filter((song) => song.is_new).length}</strong></div>
@@ -436,3 +435,6 @@
     </section>
   {/if}
 {/if}
+
+{#if status}<NotificationToast message={status} ondismiss={() => { status = ''; }} />{/if}
+{#if error}<NotificationToast message={error} kind="error" ondismiss={() => { error = ''; }} />{/if}

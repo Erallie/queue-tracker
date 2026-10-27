@@ -5,6 +5,7 @@
   import { tagVisualStyle } from '$lib/color';
   import { normalizeSearch } from '$lib/search';
   import { relativeTime } from '$lib/time';
+  import NotificationToast from '$lib/NotificationToast.svelte';
   import type { Account, Catalog, QueueState, Song } from '$lib/types';
 
   let catalog = $state<Catalog>({ songs: [], tags: [] });
@@ -15,7 +16,6 @@
   let loading = $state(true);
   let requesting = $state('');
   let removingQueueIndex = $state<number | null>(null);
-  let queueError = $state('');
   let message = $state('');
   let error = $state('');
   let clock = $state(Date.now());
@@ -126,11 +126,11 @@
   async function removeFromQueue(index: number, title: string) {
     if (!confirm(`Remove ${title} from the queue?`)) return;
     removingQueueIndex = index;
-    queueError = '';
+    error = '';
     try {
       await removeQueueItem(index);
     } catch (caught) {
-      queueError = caught instanceof Error ? caught.message : 'Could not remove this request';
+      error = caught instanceof Error ? caught.message : 'Could not remove this request';
     } finally {
       removingQueueIndex = null;
     }
@@ -191,7 +191,6 @@
     </span>
   </div>
   <div class="queue-viewport">
-    {#if queueError}<div class="notice error" role="alert">{queueError}</div>{/if}
     {#if queueState.queue.length === 0}
       <p class="queue-empty">The request queue is empty.</p>
     {:else}
@@ -222,8 +221,6 @@
   </div>
 
   {#if selectedTags.length > 1}<p class="muted">Showing songs that have all {selectedTags.length} selected tags.</p>{/if}
-  {#if message}<div class="notice success" role="status">{message}</div>{/if}
-
   <div class="mobile-sort-controls">
     <label for="mobile-sort">Sort by</label>
     <select id="mobile-sort" value={sortDirection === 'none' ? 'none' : `${sortField}:${sortDirection}`} onchange={selectMobileSort}>
@@ -274,11 +271,5 @@
   {/if}
 </section>
 
-{#if error}
-  <div class="notice error request-error-toast" role="alert">
-    <span>{error}</span>
-    <button class="toast-dismiss" type="button" aria-label="Dismiss notification" onclick={() => { error = ''; }}>
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" /></svg>
-    </button>
-  </div>
-{/if}
+{#if message}<NotificationToast message={message} ondismiss={() => { message = ''; }} />{/if}
+{#if error}<NotificationToast message={error} kind="error" ondismiss={() => { error = ''; }} />{/if}

@@ -5,6 +5,7 @@
   import discordIcon from '$lib/assets/providers/discord.svg';
   import googleIcon from '$lib/assets/providers/google-g.svg';
   import profilePlaceholder from '$lib/assets/providers/profile-placeholder.svg';
+  import NotificationToast from '$lib/NotificationToast.svelte';
   import type { Account } from '$lib/types';
 
   let me = $state<Account>({ authenticated: false, is_admin: false, identities: [] });
@@ -28,6 +29,8 @@
   async function disconnect(provider: string, name: string) {
     const last = me.identities.length === 1;
     if (!confirm(last ? `Disconnect ${name} and permanently delete your Queue Tracker account?` : `Disconnect ${name}?`)) return;
+    status = '';
+    error = '';
     try {
       const result = await unlink(provider);
       if (result.account_deleted) { me = { authenticated: false, is_admin: false, identities: [] }; status = 'Your account and saved identity were deleted.'; }
@@ -52,9 +55,6 @@
 <svelte:head><title>Account — Erallie's Song Queue</title></svelte:head>
 
 <section class="page-intro"><div><div class="eyebrow">Your account</div><h1>One profile,<br />your choice of login.</h1><p class="lede">Link Twitch, Discord, or Google. Requests use your Twitch name first, then Discord, then Google.</p></div></section>
-
-{#if status}<div class="notice success" role="status">{status}</div>{/if}
-{#if error}<div class="notice error" role="alert">{error}</div>{/if}
 
 {#if loading}
   <section class="panel">Loading your account…</section>
@@ -104,3 +104,6 @@
     </div>
   </section>
 {/if}
+
+{#if status}<NotificationToast message={status} ondismiss={() => { status = ''; }} />{/if}
+{#if error}<NotificationToast message={error} kind="error" ondismiss={() => { error = ''; }} />{/if}
