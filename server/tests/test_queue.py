@@ -7,7 +7,7 @@ from types import SimpleNamespace
 sys.modules.setdefault("aiohttp", SimpleNamespace())
 
 from queue_tracker.database import Store
-from queue_tracker.queue import QueueBridge, QueueClosedError, QueueLimitError, SongAlreadyQueuedError
+from queue_tracker.queue import QueueBridge, QueueClosedError, QueueLimitError, SongAlreadyQueuedError, TwitchChatBridge
 
 
 class QueueTests(unittest.IsolatedAsyncioTestCase):
@@ -47,6 +47,27 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
 
         await self.queue.remove_by_id(self.queue.current_queue[0]["id"])
         self.assertEqual(states, [False, True, False, True])
+
+    async def test_redemption_announcements_include_optional_viewer_input(self):
+        bridge = TwitchChatBridge(self.store, self.queue, "client", "broadcaster", lambda: None)
+        messages = []
+        bridge._schedule_message = messages.append
+
+        bridge._handle_redemption({
+            "user_name": "jennytaz",
+            "reward": {"title": "Sing Mode"},
+            "user_input": "",
+        })
+        bridge._handle_redemption({
+            "user_name": "jennytaz",
+            "reward": {"title": "Sing My Line"},
+            "user_input": "I am a person. I exist",
+        })
+
+        self.assertEqual(messages, [
+            "jennytaz just redeemed Sing Mode",
+            'jennytaz just redeemed Sing My Line: "I am a person. I exist"',
+        ])
 
     async def test_closed_queue_rejects_requests(self):
         await self.queue.set_open(False)

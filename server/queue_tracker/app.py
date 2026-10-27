@@ -165,8 +165,9 @@ class Service:
         ) as response:
             validation = await response.json()
         if response.status == 200:
-            if "user:read:chat" not in validation.get("scopes", []):
-                raise RuntimeError("Relink the owner Twitch account to grant chat access")
+            required_scopes = {"user:read:chat", "user:write:chat", "channel:read:redemptions"}
+            if not required_scopes.issubset(set(validation.get("scopes", []))):
+                raise RuntimeError("Relink the owner Twitch account to grant chat and Channel Points access")
             return access_token
         if not refresh_token:
             raise RuntimeError("Relink the owner Twitch account to refresh chat access")
