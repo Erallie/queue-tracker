@@ -512,7 +512,7 @@
         <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_chat_enabled} /> Accept Twitch chat commands</label>
         <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_announce_requests} /> Announce new song requests in Twitch chat</label>
         <label class="checkbox-setting"><input type="checkbox" bind:checked={settings.twitch_announce_queue_status} /> Announce when the queue opens or closes</label>
-        <p class="muted">Sign out and sign back in with the owner Twitch account once after this update to grant permission to send chat messages and read Channel Points redemptions.</p>
+        <p class="muted">Sign out and sign back in with the owner Twitch account once after this update to grant permission to send chat messages.</p>
       </div>
       <div class="actions"><button class="button green" disabled={saving} onclick={() => runSave(saveTrackingSettings, 'Settings saved')}>Save settings</button></div>
     {/if}

@@ -16,7 +16,7 @@ class Provider:
 
 
 PROVIDERS = {
-    "twitch": Provider("https://id.twitch.tv/oauth2/authorize", "https://id.twitch.tv/oauth2/token", "https://api.twitch.tv/helix/users", "user:read:email user:read:chat user:write:chat channel:read:redemptions"),
+    "twitch": Provider("https://id.twitch.tv/oauth2/authorize", "https://id.twitch.tv/oauth2/token", "https://api.twitch.tv/helix/users", "user:read:email user:read:chat user:write:chat"),
     "discord": Provider("https://discord.com/oauth2/authorize", "https://discord.com/api/v10/oauth2/token", "https://discord.com/api/v10/users/@me", "identify email"),
     "google": Provider("https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", "https://openidconnect.googleapis.com/v1/userinfo", "openid profile email"),
 }

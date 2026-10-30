@@ -287,6 +287,9 @@ class TwitchChatBridge:
         delay = 2
         while True:
             try:
+                if not self.store.settings()["twitch_chat_enabled"]:
+                    await asyncio.sleep(30)
+                    continue
                 token = await self.token_provider()
                 if not self.session or self.session.closed:
                     self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
@@ -296,7 +299,7 @@ class TwitchChatBridge:
                     await self._subscribe(session_id, token)
                     self.connected = True
                     delay = 2
-                    logging.info("Twitch EventSub listener connected")
+                    logging.info("Twitch chat command listener connected")
                     async for message in socket:
                         if message.type != aiohttp.WSMsgType.TEXT:
                             continue
@@ -310,12 +313,7 @@ class TwitchChatBridge:
                                 self.seen_message_ids.add(message_id)
                                 if len(self.seen_message_ids) > 1000:
                                     self.seen_message_ids.clear()
-                            subscription_type = str(payload.get("metadata", {}).get("subscription_type") or "")
-                            event = payload.get("payload", {}).get("event", {})
-                            if subscription_type == "channel.chat.message":
-                                await self._handle_chat(event)
-                            elif subscription_type == "channel.channel_points_custom_reward_redemption.add":
-                                self._handle_redemption(event)
+                            await self._handle_chat(payload.get("payload", {}).get("event", {}))
                         elif kind == "session_reconnect":
                             break
             except asyncio.CancelledError:
@@ -334,38 +332,23 @@ class TwitchChatBridge:
             "Client-Id": self.client_id,
             "Content-Type": "application/json",
         }
-        subscriptions = [
-            (
-                "channel.chat.message",
-                {
-                    "broadcaster_user_id": self.broadcaster_id,
-                    "user_id": self.broadcaster_id,
-                },
-            ),
-            (
-                "channel.channel_points_custom_reward_redemption.add",
-                {"broadcaster_user_id": self.broadcaster_id},
-            ),
-        ]
-        for subscription_type, condition in subscriptions:
-            body = {
-                "type": subscription_type,
-                "version": "1",
-                "condition": condition,
-                "transport": {"method": "websocket", "session_id": session_id},
-            }
-            async with self.session.post(
-                "https://api.twitch.tv/helix/eventsub/subscriptions", headers=headers, json=body
-            ) as response:
-                if response.status >= 400:
-                    detail = await response.text()
-                    raise RuntimeError(
-                        f"Twitch {subscription_type} subscription failed ({response.status}): {detail}"
-                    )
+        body = {
+            "type": "channel.chat.message",
+            "version": "1",
+            "condition": {
+                "broadcaster_user_id": self.broadcaster_id,
+                "user_id": self.broadcaster_id,
+            },
+            "transport": {"method": "websocket", "session_id": session_id},
+        }
+        async with self.session.post(
+            "https://api.twitch.tv/helix/eventsub/subscriptions", headers=headers, json=body
+        ) as response:
+            if response.status >= 400:
+                detail = await response.text()
+                raise RuntimeError(f"Twitch chat subscription failed ({response.status}): {detail}")
 
     async def _handle_chat(self, event: dict[str, Any]) -> None:
-        if not self.store.settings()["twitch_chat_enabled"]:
-            return
         text = str(event.get("message", {}).get("text") or "").strip()
         requester_id = str(event.get("chatter_user_id") or "")
         requester_name = str(event.get("chatter_user_name") or event.get("chatter_user_login") or "Viewer")
@@ -400,16 +383,6 @@ class TwitchChatBridge:
             item = self.queue.current_queue[index]
             if item.get("requester_provider") == "twitch" and item.get("requester_provider_id") == requester_id:
                 await self.queue.remove_by_id(str(item["id"]))
-
-    def _handle_redemption(self, event: dict[str, Any]) -> None:
-        user_name = str(event.get("user_name") or event.get("user_login") or "A viewer")
-        reward = event.get("reward") or {}
-        reward_title = str(reward.get("title") or "a reward")
-        user_input = " ".join(str(event.get("user_input") or "").split())
-        message = f"{user_name} just redeemed {reward_title}"
-        if user_input:
-            message += f': "{user_input}"'
-        self._schedule_message(message)
 
 
 async def hourly_maintenance(store: Store) -> None:
